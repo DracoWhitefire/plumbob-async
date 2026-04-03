@@ -1,14 +1,33 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Async FRL link training state machine for HDMI 2.1.
+//!
+//! `plumbob-async` is the async companion to [`plumbob`], following the same design split
+//! as `embedded-hal` / `embedded-hal-async`. It mirrors [`plumbob::ScdcClient`] and
+//! [`plumbob::FrlTrainer`] with `async fn` methods and re-exports all shared protocol and
+//! training types from `plumbob`.
+//!
+//! # Features
+//!
+//! - **`alloc`** — enables `TrainingTrace` and `FrlTrainer::train_at_rate_traced`.
+//! - **`std`** — implies `alloc`; no additional API surface.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#![no_std]
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
+#![allow(async_fn_in_trait)]
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+mod client;
+mod trainer;
+
+pub use client::ScdcClient;
+pub use trainer::FrlTrainer;
+
+pub use plumbob::{
+    CedCount, CedCounters, FfeLevels, FrlConfig, LtpReq, TrainingConfig, TrainingError,
+    TrainingOutcome, TrainingStatus,
+};
+
+#[cfg(feature = "alloc")]
+pub use plumbob::{TrainingEvent, TrainingTrace};
