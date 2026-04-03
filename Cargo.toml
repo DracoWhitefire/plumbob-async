@@ -15,5 +15,9 @@ alloc = ["plumbob/alloc"]
 std = ["alloc", "plumbob/std"]
 
 [dependencies]
-plumbob = { version = "0.1.0", default-features = false }
+plumbob = { path = "../plumbob", default-features = false }
 hdmi-hal-async = { version = "0.1.0", default-features = false }
+display-types = { version = "0.3.1", default-features = false }
+
+[dev-dependencies]
+pollster = { version = "0.3", features = ["macro"] }

@@ -32,8 +32,7 @@ pub trait ScdcClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CedCount, FfeLevels, LtpReq};
-    use plumbob::CedCounters;
+    use crate::{CedCount, LtpReq};
 
     struct MockScdc {
         status: TrainingStatus,
@@ -52,9 +51,9 @@ mod tests {
 
         async fn read_ced(&mut self) -> Result<CedCounters, Self::Error> {
             Ok(CedCounters {
-                lane0: Some(CedCount(0)),
-                lane1: Some(CedCount(0)),
-                lane2: Some(CedCount(0)),
+                lane0: Some(CedCount::new(0)),
+                lane1: Some(CedCount::new(0)),
+                lane2: Some(CedCount::new(0)),
                 lane3: None,
             })
         }
