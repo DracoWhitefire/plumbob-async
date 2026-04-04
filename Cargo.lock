@@ -38,9 +38,9 @@ dependencies = [
 
 [[package]]
 name = "plumbob"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2020efe89453b76acd3f7a518e5ca2a1a9dc3a648b67124eebdee88ee33c33c7"
+checksum = "50b93b044d41b6df02bc7cb4aff38234b94f7e18621217bad863417bef843d64"
 dependencies = [
  "display-types",
  "hdmi-hal",
