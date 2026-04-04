@@ -6,8 +6,8 @@ use crate::{LtpReq, TrainingConfig, TrainingError, TrainingOutcome};
 #[cfg(feature = "alloc")]
 use crate::FfeLevels;
 
-use super::sim::{MockPhy, RATE, SimScdc, cfg, flt_ready, frl_started, ltp, not_ready};
 use super::FrlTrainer;
+use super::sim::{MockPhy, RATE, SimScdc, cfg, flt_ready, frl_started, ltp, not_ready};
 
 // -------------------------------------------------------------------------
 // State machine: normal paths
@@ -591,30 +591,36 @@ mod trace_tests {
     async fn trace_error_write_frl_config() {
         let mut scdc = SimScdc::new();
         scdc.fail_write_frl_config = true;
-        assert!(FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .is_err());
+        assert!(
+            FrlTrainer::new(scdc, MockPhy::new())
+                .train_at_rate_traced(RATE, &TrainingConfig::default())
+                .await
+                .is_err()
+        );
     }
 
     #[pollster::test]
     async fn trace_error_set_frl_rate() {
         let mut phy = MockPhy::new();
         phy.fail_set_frl_rate = true;
-        assert!(FrlTrainer::new(SimScdc::new(), phy)
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .is_err());
+        assert!(
+            FrlTrainer::new(SimScdc::new(), phy)
+                .train_at_rate_traced(RATE, &TrainingConfig::default())
+                .await
+                .is_err()
+        );
     }
 
     #[pollster::test]
     async fn trace_error_read_training_status_phase2() {
         let mut scdc = SimScdc::new();
         scdc.push_err();
-        assert!(FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .is_err());
+        assert!(
+            FrlTrainer::new(scdc, MockPhy::new())
+                .train_at_rate_traced(RATE, &TrainingConfig::default())
+                .await
+                .is_err()
+        );
     }
 
     #[pollster::test]
@@ -622,10 +628,12 @@ mod trace_tests {
         let mut scdc = SimScdc::new();
         scdc.push(flt_ready());
         scdc.push_err();
-        assert!(FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .is_err());
+        assert!(
+            FrlTrainer::new(scdc, MockPhy::new())
+                .train_at_rate_traced(RATE, &TrainingConfig::default())
+                .await
+                .is_err()
+        );
     }
 
     #[pollster::test]
@@ -634,10 +642,12 @@ mod trace_tests {
         scdc.push(flt_ready());
         scdc.push(frl_started());
         scdc.push_err();
-        assert!(FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .is_err());
+        assert!(
+            FrlTrainer::new(scdc, MockPhy::new())
+                .train_at_rate_traced(RATE, &TrainingConfig::default())
+                .await
+                .is_err()
+        );
     }
 
     #[pollster::test]
@@ -647,10 +657,12 @@ mod trace_tests {
         scdc.push(frl_started());
         scdc.push(ltp(LtpReq::Lfsr0));
         scdc.fail_read_ced = true;
-        assert!(FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .is_err());
+        assert!(
+            FrlTrainer::new(scdc, MockPhy::new())
+                .train_at_rate_traced(RATE, &TrainingConfig::default())
+                .await
+                .is_err()
+        );
     }
 
     #[pollster::test]
@@ -661,10 +673,12 @@ mod trace_tests {
         scdc.push(ltp(LtpReq::Lfsr0));
         let mut phy = MockPhy::new();
         phy.fail_send_ltp = true;
-        assert!(FrlTrainer::new(scdc, phy)
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .is_err());
+        assert!(
+            FrlTrainer::new(scdc, phy)
+                .train_at_rate_traced(RATE, &TrainingConfig::default())
+                .await
+                .is_err()
+        );
     }
 
     #[pollster::test]

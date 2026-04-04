@@ -52,7 +52,10 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
             })
             .await
             .map_err(TrainingError::Scdc)?;
-        self.phy.set_frl_rate(rate).await.map_err(TrainingError::Phy)?;
+        self.phy
+            .set_frl_rate(rate)
+            .await
+            .map_err(TrainingError::Phy)?;
 
         // Phase 2 — Readiness: poll until the sink asserts flt_ready.
         let mut i = 0u32;
@@ -97,7 +100,9 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
                 .await
                 .map_err(TrainingError::Scdc)?;
             if status.ltp_req == LtpReq::None {
-                return Ok(TrainingOutcome::Success { achieved_rate: rate });
+                return Ok(TrainingOutcome::Success {
+                    achieved_rate: rate,
+                });
             }
             let _ced = self.scdc.read_ced().await.map_err(TrainingError::Scdc)?;
             self.phy
@@ -130,7 +135,10 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
             })
             .await
             .map_err(TrainingError::Scdc)?;
-        self.phy.set_frl_rate(rate).await.map_err(TrainingError::Phy)?;
+        self.phy
+            .set_frl_rate(rate)
+            .await
+            .map_err(TrainingError::Phy)?;
         events.push(TrainingEvent::RateConfigured {
             rate,
             ffe_levels: config.ffe_levels,
@@ -145,12 +153,16 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
                 .await
                 .map_err(TrainingError::Scdc)?;
             if status.flt_ready {
-                events.push(TrainingEvent::FltReadyReceived { after_iterations: i });
+                events.push(TrainingEvent::FltReadyReceived {
+                    after_iterations: i,
+                });
                 break false;
             }
             i += 1;
             if i >= config.flt_ready_timeout {
-                events.push(TrainingEvent::FltReadyTimeout { iterations_elapsed: i });
+                events.push(TrainingEvent::FltReadyTimeout {
+                    iterations_elapsed: i,
+                });
                 break true;
             }
         };
@@ -170,12 +182,16 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
                 .await
                 .map_err(TrainingError::Scdc)?;
             if status.frl_start {
-                events.push(TrainingEvent::FrlStartReceived { after_iterations: i });
+                events.push(TrainingEvent::FrlStartReceived {
+                    after_iterations: i,
+                });
                 break false;
             }
             i += 1;
             if i >= config.frl_start_timeout {
-                events.push(TrainingEvent::FrlStartTimeout { iterations_elapsed: i });
+                events.push(TrainingEvent::FrlStartTimeout {
+                    iterations_elapsed: i,
+                });
                 break true;
             }
         };
@@ -196,8 +212,12 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
                 .await
                 .map_err(TrainingError::Scdc)?;
             if status.ltp_req == LtpReq::None {
-                events.push(TrainingEvent::AllLanesSatisfied { after_iterations: i });
-                break TrainingOutcome::Success { achieved_rate: rate };
+                events.push(TrainingEvent::AllLanesSatisfied {
+                    after_iterations: i,
+                });
+                break TrainingOutcome::Success {
+                    achieved_rate: rate,
+                };
             }
             if Some(status.ltp_req) != last_ltp {
                 events.push(TrainingEvent::LtpPatternRequested {
@@ -212,7 +232,9 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
                 .map_err(TrainingError::Phy)?;
             i += 1;
             if i >= config.ltp_timeout {
-                events.push(TrainingEvent::LtpLoopTimeout { iterations_elapsed: i });
+                events.push(TrainingEvent::LtpLoopTimeout {
+                    iterations_elapsed: i,
+                });
                 break TrainingOutcome::FallbackRequired;
             }
         };

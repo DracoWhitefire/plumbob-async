@@ -2,10 +2,7 @@ extern crate std;
 use std::collections::VecDeque;
 
 use display_types::cea861::hdmi_forum::HdmiForumFrl;
-use hdmi_hal_async::{
-    LtpPattern,
-    phy::HdmiPhy,
-};
+use hdmi_hal_async::{LtpPattern, phy::HdmiPhy};
 
 use crate::client::ScdcClient;
 use crate::{CedCounters, FrlConfig, LtpReq, TrainingConfig, TrainingStatus};
@@ -114,10 +111,7 @@ impl HdmiPhy for MockPhy {
         Ok(())
     }
 
-    async fn adjust_equalization(
-        &mut self,
-        _params: hdmi_hal_async::EqParams,
-    ) -> Result<(), ()> {
+    async fn adjust_equalization(&mut self, _params: hdmi_hal_async::EqParams) -> Result<(), ()> {
         Ok(())
     }
 
