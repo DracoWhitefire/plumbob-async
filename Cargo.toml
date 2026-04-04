@@ -3,12 +3,12 @@ name = "plumbob-async"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-description = "FRL link training state machine for HDMI 2.1"
+description = "Async FRL link training state machine for HDMI 2.1"
 readme = "README.md"
 license = "MPL-2.0"
 repository = "https://github.com/DracoWhitefire/plumbob-async"
 keywords = ["hdmi", "link-training", "frl", "embedded", "no-std"]
-categories = ["hardware-support", "embedded", "no-std"]
+categories = ["asynchronous", "hardware-support", "embedded", "no-std"]
 
 [features]
 alloc = ["plumbob/alloc"]

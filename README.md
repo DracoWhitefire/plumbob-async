@@ -1,5 +1,6 @@
 # plumbob-async
 
+[![CI](https://github.com/DracoWhitefire/plumbob-async/actions/workflows/ci.yml/badge.svg)](https://github.com/DracoWhitefire/plumbob-async/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/plumbob-async.svg)](https://crates.io/crates/plumbob-async)
 [![docs.rs](https://docs.rs/plumbob-async/badge.svg)](https://docs.rs/plumbob-async)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
