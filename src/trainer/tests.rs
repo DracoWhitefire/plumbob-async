@@ -369,6 +369,21 @@ async fn sim_scdc_read_ced_returns_all_none() {
     assert!(ced.lane3.is_none());
 }
 
+#[pollster::test]
+async fn mock_phy_adjust_equalization_always_succeeds() {
+    use hdmi_hal_async::{EqParams, phy::HdmiPhy};
+    let mut phy = MockPhy::new();
+    assert!(phy.adjust_equalization(EqParams::new()).await.is_ok());
+}
+
+#[pollster::test]
+async fn mock_phy_set_scrambling_always_succeeds() {
+    use hdmi_hal_async::phy::HdmiPhy;
+    let mut phy = MockPhy::new();
+    assert!(phy.set_scrambling(true).await.is_ok());
+    assert!(phy.set_scrambling(false).await.is_ok());
+}
+
 // -------------------------------------------------------------------------
 // Diagnostics: TrainingTrace event sequences
 // -------------------------------------------------------------------------
@@ -566,6 +581,90 @@ mod trace_tests {
         assert!(trace.events.contains(&TrainingEvent::AllLanesSatisfied {
             after_iterations: 4
         }));
+    }
+
+    // -------------------------------------------------------------------------
+    // Error propagation through train_at_rate_traced
+    // -------------------------------------------------------------------------
+
+    #[pollster::test]
+    async fn trace_error_write_frl_config() {
+        let mut scdc = SimScdc::new();
+        scdc.fail_write_frl_config = true;
+        assert!(FrlTrainer::new(scdc, MockPhy::new())
+            .train_at_rate_traced(RATE, &TrainingConfig::default())
+            .await
+            .is_err());
+    }
+
+    #[pollster::test]
+    async fn trace_error_set_frl_rate() {
+        let mut phy = MockPhy::new();
+        phy.fail_set_frl_rate = true;
+        assert!(FrlTrainer::new(SimScdc::new(), phy)
+            .train_at_rate_traced(RATE, &TrainingConfig::default())
+            .await
+            .is_err());
+    }
+
+    #[pollster::test]
+    async fn trace_error_read_training_status_phase2() {
+        let mut scdc = SimScdc::new();
+        scdc.push_err();
+        assert!(FrlTrainer::new(scdc, MockPhy::new())
+            .train_at_rate_traced(RATE, &TrainingConfig::default())
+            .await
+            .is_err());
+    }
+
+    #[pollster::test]
+    async fn trace_error_read_training_status_phase3() {
+        let mut scdc = SimScdc::new();
+        scdc.push(flt_ready());
+        scdc.push_err();
+        assert!(FrlTrainer::new(scdc, MockPhy::new())
+            .train_at_rate_traced(RATE, &TrainingConfig::default())
+            .await
+            .is_err());
+    }
+
+    #[pollster::test]
+    async fn trace_error_read_training_status_phase4() {
+        let mut scdc = SimScdc::new();
+        scdc.push(flt_ready());
+        scdc.push(frl_started());
+        scdc.push_err();
+        assert!(FrlTrainer::new(scdc, MockPhy::new())
+            .train_at_rate_traced(RATE, &TrainingConfig::default())
+            .await
+            .is_err());
+    }
+
+    #[pollster::test]
+    async fn trace_error_read_ced() {
+        let mut scdc = SimScdc::new();
+        scdc.push(flt_ready());
+        scdc.push(frl_started());
+        scdc.push(ltp(LtpReq::Lfsr0));
+        scdc.fail_read_ced = true;
+        assert!(FrlTrainer::new(scdc, MockPhy::new())
+            .train_at_rate_traced(RATE, &TrainingConfig::default())
+            .await
+            .is_err());
+    }
+
+    #[pollster::test]
+    async fn trace_error_send_ltp() {
+        let mut scdc = SimScdc::new();
+        scdc.push(flt_ready());
+        scdc.push(frl_started());
+        scdc.push(ltp(LtpReq::Lfsr0));
+        let mut phy = MockPhy::new();
+        phy.fail_send_ltp = true;
+        assert!(FrlTrainer::new(scdc, phy)
+            .train_at_rate_traced(RATE, &TrainingConfig::default())
+            .await
+            .is_err());
     }
 
     #[pollster::test]

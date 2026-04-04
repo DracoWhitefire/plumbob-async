@@ -59,15 +59,33 @@ mod tests {
         }
     }
 
-    // Verify the trait is well-formed and that a mock can implement it.
-    #[test]
-    fn mock_scdc_implements_trait() {
-        let _ = MockScdc {
+    // Verify the trait is well-formed and that all three methods can be awaited.
+    #[pollster::test]
+    async fn mock_scdc_all_methods() {
+        use crate::{FfeLevels, FrlConfig};
+        use display_types::cea861::hdmi_forum::HdmiForumFrl;
+
+        let mut scdc = MockScdc {
             status: TrainingStatus {
-                flt_ready: false,
-                frl_start: false,
+                flt_ready: true,
+                frl_start: true,
                 ltp_req: LtpReq::None,
             },
         };
+
+        scdc.write_frl_config(FrlConfig {
+            rate: HdmiForumFrl::Rate6Gbps4Lanes,
+            ffe_levels: FfeLevels::Ffe0,
+            dsc_frl_max: false,
+        })
+        .await
+        .unwrap();
+
+        let status = scdc.read_training_status().await.unwrap();
+        assert!(status.flt_ready);
+
+        let ced = scdc.read_ced().await.unwrap();
+        assert_eq!(ced.lane0.unwrap().value(), 0);
+        assert!(ced.lane3.is_none());
     }
 }
