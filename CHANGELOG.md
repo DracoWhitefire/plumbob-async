@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **SLSA Build Level 2 provenance** — release artifacts are attested via
+  `actions/attest-build-provenance` and verified with
+  `gh attestation verify <file> --repo DracoWhitefire/plumbob-async`.
+
 ## [0.1.0] - 2026-04-04
 
 ### Added

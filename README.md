@@ -5,6 +5,7 @@
 [![docs.rs](https://docs.rs/plumbob-async/badge.svg)](https://docs.rs/plumbob-async)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rustc-1.85+-orange.svg)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
+[![SLSA Level 2](https://slsa.dev/images/gh-badge-level2.svg)](https://slsa.dev)
 
 Async FRL link training state machine for HDMI 2.1.
 
@@ -186,6 +187,20 @@ for the async `HdmiPhy` trait. It does not depend on any executor or runtime cra
 
 - [`doc/architecture.md`](doc/architecture.md) — role, scope, interface boundaries, and
   design principles
+
+## Verifying releases
+
+Each release is built on GitHub Actions and attested with
+[SLSA Build Level 2](https://slsa.dev) provenance. To verify a release
+`.crate` against its signed provenance, install the
+[GitHub CLI](https://cli.github.com/) and run:
+
+```sh
+gh attestation verify plumbob-async-X.Y.Z.crate --repo DracoWhitefire/plumbob-async
+```
+
+The attested `.crate` is attached to each
+[GitHub release](https://github.com/DracoWhitefire/plumbob-async/releases).
 
 ## License
 
