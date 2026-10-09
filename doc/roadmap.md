@@ -14,17 +14,11 @@
 
 ## Planned
 
-### CED-driven equalization
-
-Mirrors the same open item in `plumbob`: `read_ced` is called on every LTP loop
-iteration but the returned `CedCounters` are not yet acted on. Once `plumbob` drives
-`adjust_equalization` from CED feedback, the same logic will be carried here.
-
 ### `culvert-async` integration
 
-`culvert-async` will implement `plumbob_async::ScdcClient` for its `Scdc<T>` via a
-`plumbob-async` cargo feature, mirroring the sync relationship between `culvert` and
-`plumbob`. Until then, callers supply their own `ScdcClient` implementation.
+`culvert-async`'s `plumbob-async` cargo feature implements the previous, three-method
+`ScdcClient`. It is updated to the eight-method trait when `culvert-async` adopts culvert's
+shared register encoding and corrected register map.
 
 ### `LinkTrainer` trait
 

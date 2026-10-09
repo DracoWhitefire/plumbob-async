@@ -7,7 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **`FrlTrainer` runs plumbob's link training state machine.** Training now follows the
+  HDMI 2.1 link training states (LTS:2 → LTS:3 → LTS:P, with LTS:4 and LTS:L) by running
+  `plumbob::lts::run` over the async SCDC client and PHY, instead of a copy of plumbob's
+  previous four-phase loop. Sync and async training are the same procedure, with the same
+  outcomes, errors and traces; see plumbob's changelog for the procedure's changes.
+- **`ScdcClient` has one method per register operation**, the async counterparts of
+  plumbob's: `read_flt_ready`, `read_update_flags`, `clear_update_flags`,
+  `read_ltp_requests`, `read_source_test_config`, `write_config_0_defaults`,
+  `write_frl_config` and `read_ced`. `read_training_status` and the `TrainingStatus`
+  re-export are removed.
+- **`FrlTrainer::train(rates, config)`** trains over a list of rates, stepping down when
+  the sink requests it; `train_at_rate` is `train` with one rate. `train_traced` joins
+  `train_at_rate_traced`.
+- **`TrainingOutcome::FallbackRequired` carries a `reason`** (`FallbackReason`, now
+  re-exported), and `TrainingConfig`, `LtpReq`, `FfeLevels`, `FrlConfig` and
+  `TrainingEvent` follow plumbob's new definitions.
+- **`display-types` updated to 0.4**, as across the stack.
+
 ### Added
+
+- Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags` and `SourceTestConfig`.
+  `TrainingEvent` is re-exported without the `alloc` feature.
 
 - **SLSA Build Level 2 provenance** — release artifacts are attested via
   `actions/attest-build-provenance` and verified with

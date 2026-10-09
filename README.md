@@ -9,11 +9,12 @@
 
 Async FRL link training state machine for HDMI 2.1.
 
-`plumbob-async` is the async companion to [`plumbob`](https://crates.io/crates/plumbob),
-following the same design split as `embedded-hal` / `embedded-hal-async`. It mirrors the
-four-phase FRL training state machine with `async fn` methods, yielding to the executor
-between poll iterations instead of spinning. All shared protocol and training types are
-re-exported from `plumbob`; nothing is duplicated.
+`plumbob-async` is the async companion to [`plumbob`](https://crates.io/crates/plumbob).
+It runs plumbob's link training state machine — `plumbob::lts::run`, which performs no
+I/O itself — over an async `ScdcClient` and an async `HdmiPhy`, `.await`ing each
+operation, so training yields to the executor wherever the I/O waits. There is one state
+machine for sync and async training: the outcomes, errors and traces are exactly
+plumbob's. All shared protocol and training types are re-exported from `plumbob`.
 
 ## Usage
 
@@ -22,34 +23,34 @@ re-exported from `plumbob`; nothing is duplicated.
 plumbob-async = "0.1"
 ```
 
-Implement `ScdcClient` against your async SCDC transport:
+Implement `ScdcClient` against your async SCDC transport, one method per register
+operation (the async counterpart of `plumbob::ScdcClient`; see its documentation for what
+each method must guarantee):
 
 ```rust
-use plumbob_async::{ScdcClient, CedCounters, FrlConfig, TrainingStatus};
+use plumbob_async::{
+    CedCounters, FrlConfig, LtpRequests, ScdcClient, SourceTestConfig, UpdateFlags,
+};
 
 struct MyScdcClient { /* async I²C / DDC transport */ }
 
 impl ScdcClient for MyScdcClient {
     type Error = MyError;
 
-    async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), MyError> {
-        // write rate and FFE level count to SCDC Config_0
-        todo!()
-    }
-
-    async fn read_training_status(&mut self) -> Result<TrainingStatus, MyError> {
-        // read flt_ready, frl_start, ltp_req from SCDC Status_Flags
-        todo!()
-    }
-
-    async fn read_ced(&mut self) -> Result<CedCounters, MyError> {
-        // read per-lane character error counts from SCDC
-        todo!()
-    }
+    // Polled in LTS:2 and LTS:3/LTS:P: await the poll interval (2 ms by default) here.
+    async fn read_flt_ready(&mut self) -> Result<bool, MyError> { todo!() }
+    async fn read_update_flags(&mut self) -> Result<UpdateFlags, MyError> { todo!() }
+    async fn clear_update_flags(&mut self, flags: UpdateFlags) -> Result<(), MyError> { todo!() }
+    async fn read_ltp_requests(&mut self) -> Result<LtpRequests, MyError> { todo!() }
+    async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, MyError> { todo!() }
+    async fn write_config_0_defaults(&mut self) -> Result<(), MyError> { todo!() }
+    async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), MyError> { todo!() }
+    async fn read_ced(&mut self) -> Result<CedCounters, MyError> { todo!() }
 }
 ```
 
-Construct an `FrlTrainer` and step down through rates until one succeeds:
+Construct an `FrlTrainer` and train over the rates to try, highest first; the sink's
+requests for a lower rate step down through the list:
 
 ```rust
 use display_types::cea861::hdmi_forum::HdmiForumFrl;
@@ -62,17 +63,12 @@ let rates = [
     HdmiForumFrl::Rate12Gbps4Lanes,
     HdmiForumFrl::Rate10Gbps4Lanes,
     HdmiForumFrl::Rate6Gbps4Lanes,
-    HdmiForumFrl::Rate3Gbps4Lanes,
 ];
 
-for rate in rates {
-    match trainer.train_at_rate(rate, &config).await? {
-        TrainingOutcome::Success { achieved_rate } => {
-            println!("Trained at {achieved_rate:?}");
-            break;
-        }
-        TrainingOutcome::FallbackRequired => continue,
-    }
+match trainer.train(&rates, &config).await? {
+    TrainingOutcome::Success { achieved_rate } => println!("Trained at {achieved_rate:?}"),
+    TrainingOutcome::FallbackRequired { reason } => println!("No FRL link: {reason:?}"),
+    _ => {}
 }
 ```
 
@@ -82,41 +78,25 @@ re-exported from `plumbob` and are identical between the sync and async APIs.
 
 ## Training procedure
 
-`train_at_rate` runs all four phases for a single rate attempt and `.await`s each SCDC
-and PHY call, yielding to the executor between iterations. `FallbackRequired` means the
-link did not converge at this rate; `TrainingError` means a hard I/O failure. The two are
-kept distinct so a caller diagnosing a failure knows whether it came from the protocol or
-the bus.
+The procedure is plumbob's — LTS:2 (prepare), LTS:3 (train), LTS:P (pass), with LTS:4
+(lower rate) on the sink's request and LTS:L (exit to TMDS) before every
+`FallbackRequired` — because it is plumbob's code: `FrlTrainer` runs `plumbob::lts::run`
+over its async SCDC client and PHY. See
+[plumbob's README](https://github.com/DracoWhitefire/plumbob#training-procedure) and
+architecture document for the states, the poll and retrain limits, and the per-lane rules.
 
-```mermaid
-flowchart TD
-    A["train_at_rate(rate, config).await"]
-    B["Phase 1\nwrite_frl_config · set_frl_rate"]
-    C["Phase 2\nawait flt_ready"]
-    D["Phase 3\nawait frl_start"]
-    E["Phase 4\nLTP loop · send_ltp"]
-    F(["Success { achieved_rate }"])
-    G(["FallbackRequired"])
-    H(["TrainingError"])
-
-    A --> B --> C
-    C -- asserted --> D
-    C -- timeout --> G
-    D -- asserted --> E
-    D -- timeout --> G
-    E -- "ltp_req == None" --> F
-    E -- timeout --> G
-    B & C & D & E -- I/O error --> H
-```
+`FallbackRequired { reason }` means no listed rate trained; `TrainingError` means a hard
+I/O failure from the SCDC client or PHY. The two are kept distinct so a caller diagnosing
+a failure knows whether it came from the protocol or the bus.
 
 ## Diagnostics
 
-Enable the `alloc` feature to get `train_at_rate_traced`, which returns a `TrainingTrace`
-alongside the outcome. The trace type and its `TrainingEvent` variants are the same as in
-`plumbob`; a sync trace and an async trace are directly comparable.
+Enable the `alloc` feature to get `train_traced` (and `train_at_rate_traced`), which
+return a `TrainingTrace` alongside the outcome. The trace and its `TrainingEvent`s are
+plumbob's: a sync trace and an async trace of the same sink are identical.
 
 ```rust
-let (outcome, trace) = trainer.train_at_rate_traced(rate, &config).await?;
+let (outcome, trace) = trainer.train_traced(&rates, &config).await?;
 
 println!("Outcome: {outcome:?}");
 for event in &trace.events {
@@ -129,15 +109,15 @@ for event in &trace.events {
 | Feature | Default | Description |
 |---------|---------|-------------|
 | `std`   | no      | Implies `alloc`; no additional API surface |
-| `alloc` | no      | Enables `TrainingTrace`, `TrainingEvent`, and `train_at_rate_traced` |
+| `alloc` | no      | Enables `TrainingTrace`, `train_traced` and `train_at_rate_traced` |
 
 No features are enabled by default.
 
 ## `no_std` builds
 
-`plumbob-async` declares `#![no_std]` throughout. The bare crate provides the full
-four-phase async state machine without an allocator. The `alloc` feature adds
-`train_at_rate_traced`; `std` implies `alloc`.
+`plumbob-async` declares `#![no_std]` throughout. The bare crate provides full async
+training without an allocator. The `alloc` feature adds `TrainingTrace`, `train_traced`
+and `train_at_rate_traced`; `std` implies `alloc`.
 
 ```toml
 # no_std, no heap
@@ -167,26 +147,30 @@ flowchart LR
     dt --> plumbob --> plumbob_async
 ```
 
-`plumbob-async` depends on `plumbob` for all shared data types and on `hdmi-hal-async`
-for the async `HdmiPhy` trait. It does not depend on any executor or runtime crate.
+`plumbob-async` depends on `plumbob` for the state machine and all shared data types,
+and on `hdmi-hal-async` for the async `HdmiPhy` trait. It does not depend on any executor
+or runtime crate.
 
 ## Out of scope
 
-- **Rate fallback policy** — `train_at_rate` returns `FallbackRequired`; the caller
-  decides the retry sequence.
+- **The training procedure** — it is `plumbob`'s (`plumbob::lts::run`); this crate
+  supplies async I/O to it.
+- **Rate fallback policy** — the caller decides which rates to pass to `train` and what
+  to do with a `FallbackRequired`.
 - **SCDC register decoding** — plumbob-async reads typed values from `ScdcClient` and
   does not decode raw register bytes.
-- **PHY vendor sequences** — plumbob-async calls `HdmiPhy::send_ltp` and `set_frl_rate`;
-  the register sequences live in platform PHY backends.
-- **Timing and inter-poll delay** — plumbob-async does not insert delays between polls.
-  The iteration limits in `TrainingConfig` are the only timeout mechanism; callers that
-  need a delay between polls implement it inside their `ScdcClient`.
+- **PHY vendor sequences** — plumbob-async calls `HdmiPhy` methods; the register
+  sequences live in platform PHY backends.
+- **Timing and inter-poll delay** — the poll limits in `TrainingConfig` are the only
+  timeout mechanism; the interval belongs inside the polled `ScdcClient` methods.
 - **Executor dependency** — no runtime crate is in the dependency graph.
 
 ## Documentation
 
-- [`doc/architecture.md`](doc/architecture.md) — role, scope, interface boundaries, and
-  design principles
+- [`doc/architecture.md`](doc/architecture.md) — role, scope, the async trait and
+  trainer, and design principles
+- [`doc/model.md`](doc/model.md) — the re-exported types and the culvert-async boundary
+- [`doc/testing.md`](doc/testing.md) — what the async driver's tests cover
 
 ## Verifying releases
 
