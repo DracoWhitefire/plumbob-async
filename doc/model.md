@@ -1,11 +1,11 @@
 # Data Model
 
 All protocol and training types used by plumbob-async are defined in `plumbob` and
-re-exported here. This document describes the re-export structure, the two types that
-are defined in plumbob-async itself, and the boundary at which culvert-async will
-eventually convert its register-layer types into plumbob's vocabulary.
+re-exported here. This document lists the re-exports, the two types defined in
+plumbob-async itself, and the boundary at which `culvert-async` converts its
+register-layer types into plumbob's vocabulary.
 
-For full field-level documentation of each re-exported type, see
+For field-level documentation of each re-exported type, see
 [`plumbob/doc/model.md`](../../plumbob/doc/model.md).
 
 ---
@@ -14,21 +14,20 @@ For full field-level documentation of each re-exported type, see
 
 | Type | Kind | Notes |
 |---|---|---|
-| `LtpReq` | enum | Sink LTP request; `None` is the phase 4 exit condition |
-| `FfeLevels` | enum | FFE level count advertised in Config_0 |
-| `FrlConfig` | struct | Rate, FFE levels, and `dsc_frl_max` written in phase 1 |
-| `TrainingStatus` | struct | `flt_ready`, `frl_start`, `ltp_req` from a single poll |
+| `LtpReq` | enum | One lane's request: 0x0 (trained), 0x1–0x8 (patterns), 0xE, 0xF |
+| `LtpRequests` | struct | The requests for all four lanes |
+| `FfeLevels` | struct | Highest TxFFE level index (0–7), written to `Config_1` |
+| `FrlConfig` | struct | `Config_1`: the rate and FFE levels |
+| `UpdateFlags` | struct | The `Update_0` training flags read and cleared |
+| `SourceTestConfig` | struct | `FLT_no_timeout` from `Source_Test_Configuration` |
 | `CedCount` | struct | 15-bit per-lane character error count |
 | `CedCounters` | struct | Per-lane `Option<CedCount>`; `lane3` is `None` in 3-lane mode |
-| `TrainingConfig` | struct | Per-attempt configuration with timeout iteration counts |
-| `TrainingOutcome` | enum | `Success { achieved_rate }` or `FallbackRequired` |
+| `TrainingConfig` | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit |
+| `TrainingOutcome` | enum | `Success { achieved_rate }` or `FallbackRequired { reason }` |
+| `FallbackReason` | enum | Why an attempt ended without a link |
 | `TrainingError` | enum | Hard I/O failure: `Scdc(e)` or `Phy(e)` |
-| `TrainingEvent` | enum | Single trace event (`alloc` feature) |
-| `TrainingTrace` | struct | Full ordered event log for one attempt (`alloc` feature) |
-
-The `From<LtpReq> for LtpPattern` conversion defined in `plumbob` is also used here
-directly: `status.ltp_req.into()` produces an `hdmi_hal::phy::LtpPattern` for the
-`HdmiPhy::send_ltp` call.
+| `TrainingEvent` | enum | One trace event |
+| `TrainingTrace` | struct | The rates, config and ordered events of an attempt (`alloc` feature) |
 
 ---
 
@@ -36,34 +35,21 @@ directly: `status.ltp_req.into()` produces an `hdmi_hal::phy::LtpPattern` for th
 
 ### `ScdcClient`
 
-The only trait defined in this crate. Async mirror of `plumbob::ScdcClient` — identical
-contract, `async fn` methods:
-
-```rust
-pub trait ScdcClient {
-    type Error;
-
-    async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), Self::Error>;
-    async fn read_training_status(&mut self) -> Result<TrainingStatus, Self::Error>;
-    async fn read_ced(&mut self) -> Result<CedCounters, Self::Error>;
-}
-```
-
-The `ScdcClient` in plumbob-async is a distinct trait from `plumbob::ScdcClient`. A
-type that implements the sync trait does not automatically implement the async one.
-Implementors for async transports implement this trait; implementors for sync transports
-implement `plumbob::ScdcClient`.
+The only trait defined in this crate: the async counterpart of `plumbob::ScdcClient`,
+with the same eight operations, meaning and implementer obligations, each an `async fn`.
+It is a distinct trait: a type implementing the sync trait does not implement this one.
+Async transports implement this trait; sync transports implement `plumbob::ScdcClient`.
 
 ### `FrlTrainer<C, P>`
 
-The central training type. Identical shape to `plumbob::FrlTrainer<C, P>` but with
-different trait bounds:
+The same shape as `plumbob::FrlTrainer<C, P>`, with different trait bounds:
 
 | | plumbob | plumbob-async |
 |---|---|---|
 | `C` bound | `plumbob::ScdcClient` | `plumbob_async::ScdcClient` |
 | `P` bound | `hdmi_hal::phy::HdmiPhy` | `hdmi_hal_async::phy::HdmiPhy` |
-| `train_at_rate` | `fn` | `async fn` |
+| Training methods | `fn` | `async fn` |
+| State machine | `plumbob::lts::run` | `plumbob::lts::run` |
 
 `new` and `into_parts` are not async; only the training methods are.
 
@@ -71,38 +57,21 @@ different trait bounds:
 
 ## `TrainingOutcome` vs. `TrainingError`
 
-These are the same types as in `plumbob`, re-exported unchanged. The distinction is the
-same:
+These are `plumbob`'s types, re-exported unchanged:
 
-- **`FallbackRequired`** — the link did not converge within the configured timeouts.
-  Normal protocol outcome; the caller decides whether to retry at a lower rate or fall
-  back to TMDS.
-- **`TrainingError::Scdc(e)` / `TrainingError::Phy(e)`** — hard I/O failure from the
-  async SCDC client or PHY. Unrelated to whether the link could have trained at this rate.
+- **`FallbackRequired { reason }`** — no listed rate trained; `reason` says why, and the
+  sink and PHY are back in TMDS. A normal protocol outcome; the caller decides what to do
+  next.
+- **`TrainingError::Scdc(e)` / `TrainingError::Phy(e)`** — a hard I/O failure from the
+  async SCDC client or PHY, unrelated to whether the link could have trained.
 
 ---
 
 ## The culvert-async boundary
 
-When `culvert-async` is built, it will implement `plumbob_async::ScdcClient` for its
-`Scdc<T>` via a `plumbob-async` cargo feature, mirroring the sync pattern in `culvert`.
-The conversion at that impl boundary will be identical in structure:
-
-```rust
-// culvert-async, behind feature = "plumbob-async"
-impl<T: ScdcTransport> plumbob_async::ScdcClient for Scdc<T> {
-    async fn read_training_status(&mut self) -> Result<plumbob::TrainingStatus, ...> {
-        let flags = self.read_status_flags().await?;
-        Ok(plumbob::TrainingStatus {
-            flt_ready: flags.flt_ready,
-            frl_start: flags.frl_start,
-            ltp_req: flags.ltp_req.into(), // culvert::LtpReq → plumbob::LtpReq
-        })
-    }
-    // ...
-}
-```
-
-The same reasoning applies as in the sync case: the `From` impls live in a feature-gated
-module in `culvert-async`; `culvert-async`'s own types are unchanged; the conversion is
-confined to the impl boundary.
+`culvert-async` implements `plumbob_async::ScdcClient` for its `Scdc<T>` behind a
+`plumbob-async` cargo feature, as `culvert` does for `plumbob::ScdcClient`: each trait
+method calls one `culvert-async` method and converts culvert's register types to
+plumbob's (`culvert::LtpRequests` → `plumbob::LtpRequests`, and so on). The conversions
+are the same as culvert's, since both crates use culvert's types; `culvert-async`'s own
+types are unchanged.
