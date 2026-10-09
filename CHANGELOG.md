@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`TrainingOutcome::FallbackRequired` carries a `reason`** (`FallbackReason`, now
   re-exported), and `TrainingConfig`, `LtpReq`, `FfeLevels`, `FrlConfig` and
   `TrainingEvent` follow plumbob's new definitions.
+- **`hdmi-hal-async` updated to 0.2**: `FrlTrainer`'s PHY implements hdmi-hal-async
+  0.2's `HdmiPhy`. Implementations must take the per-lane `send_ltp(LanePatterns)`, add
+  `set_frl_output(FrlOutput)`, use `LtpPattern`'s variants (HDMI 2.1 values; `new` is
+  removed) and apply the TxFFE level now carried in `LaneEqParams`. See hdmi-hal-async's
+  changelog.
 - **`display-types` updated to 0.4**, as across the stack.
 
 ### Added
