@@ -25,9 +25,9 @@ pub use client::ScdcClient;
 pub use trainer::FrlTrainer;
 
 pub use plumbob::{
-    CedCount, CedCounters, FfeLevels, FrlConfig, LtpReq, TrainingConfig, TrainingError,
-    TrainingOutcome, TrainingStatus,
+    CedCount, CedCounters, FallbackReason, FfeLevels, FrlConfig, LtpReq, LtpRequests,
+    SourceTestConfig, TrainingConfig, TrainingError, TrainingEvent, TrainingOutcome, UpdateFlags,
 };
 
 #[cfg(feature = "alloc")]
-pub use plumbob::{TrainingEvent, TrainingTrace};
+pub use plumbob::TrainingTrace;
