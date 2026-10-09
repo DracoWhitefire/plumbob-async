@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `std` is always available, so they could not catch a dependency that enables `std` (as
   hdmi-hal did through `display-types`).
   The publish workflow runs the same build steps.
+- **Tests compile without the `alloc` feature** — the tests that use the traced methods
+  are gated on `alloc`, and CI and the publish workflow also run the tests with no
+  features, so plain `cargo test` builds again.
 
 ## [0.1.0] - 2026-04-04
 

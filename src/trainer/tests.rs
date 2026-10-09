@@ -231,6 +231,7 @@ async fn trains_through_async_io() {
     }));
 }
 
+#[cfg(feature = "alloc")]
 #[pollster::test]
 async fn io_that_waits_gives_the_same_result() {
     let rounds = [per_lane(), all(LtpReq::None)];
@@ -252,6 +253,7 @@ async fn io_that_waits_gives_the_same_result() {
     assert_eq!(actual, expected);
 }
 
+#[cfg(feature = "alloc")]
 #[pollster::test]
 async fn a_source_test_configuration_is_read() {
     let sink = Sink::training(&[all(LtpReq::None)]).with_source_test();
@@ -328,6 +330,7 @@ async fn scdc_and_phy_errors_are_returned() {
     }
 }
 
+#[cfg(feature = "alloc")]
 #[pollster::test]
 async fn traced_training_records_the_attempt() {
     let config = TrainingConfig::default();

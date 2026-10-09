@@ -31,11 +31,15 @@ The tests check:
 
 - A full training run through async I/O, with the per-lane patterns reaching the PHY
 - **I/O that waits gives the same result** as I/O that does not, compared trace for trace
-- A source test configuration being read
+  (requires `alloc`)
+- A source test configuration being read (requires `alloc`)
 - A fallback returning the PHY to TMDS
 - `TrainingError::Scdc` and `TrainingError::Phy` propagating from every SCDC and PHY
   operation the state machine uses
-- The traced methods recording the rates, the config and the events
+- The traced methods recording the rates, the config and the events (requires `alloc`)
+
+The tests that compare or inspect traces are compiled only with the `alloc` feature. CI
+runs the suite with the `std` feature and again with no features, so it builds in both.
 
 ## Coverage
 
