@@ -164,7 +164,8 @@ mirror `plumbob`'s:
 | `std` | Implies `alloc` |
 
 The `alloc` and `std` features enable the corresponding features on the `plumbob`
-dependency, which provides `TrainingTrace`.
+dependency, which provides `TrainingTrace`. CI builds the crate with no features and with
+`alloc` for `thumbv7em-none-eabi`, a target without `std`.
 
 ---
 

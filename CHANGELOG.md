@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `actions/attest-build-provenance` and verified with
   `gh attestation verify <file> --repo DracoWhitefire/plumbob-async`.
 
+### Internal
+
+- **CI builds for a `no_std` target** — the `Build (no_std)` and `Build (alloc only)`
+  steps now build for `thumbv7em-none-eabi`. They previously built for the host, where
+  `std` is always available, so they could not catch a dependency that enables `std` (as
+  hdmi-hal did through `display-types`).
+  The publish workflow runs the same build steps.
+
 ## [0.1.0] - 2026-04-04
 
 ### Added
