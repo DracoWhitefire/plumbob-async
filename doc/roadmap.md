@@ -14,12 +14,6 @@
 
 ## Planned
 
-### `culvert-async` integration
-
-`culvert-async`'s `plumbob-async` cargo feature implements the previous, three-method
-`ScdcClient`. It is updated to the eight-method trait when `culvert-async` adopts culvert's
-shared register encoding and corrected register map.
-
 ### `LinkTrainer` trait
 
 Once the integration layer defines an async `LinkTrainer` trait, `plumbob-async` will

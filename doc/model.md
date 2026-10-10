@@ -6,32 +6,32 @@ plumbob-async itself, and the boundary at which `culvert-async` converts its
 register-layer types into plumbob's vocabulary.
 
 For field-level documentation of each re-exported type, see
-[`plumbob/doc/model.md`](../../plumbob/doc/model.md).
+[`plumbob`'s `doc/model.md`](https://github.com/DracoWhitefire/plumbob/blob/main/doc/model.md).
 
 ---
 
 ## Re-exported from `plumbob`
 
-| Type | Kind | Notes |
-|---|---|---|
-| `LtpReq` | enum | One lane's request: 0x0 (trained), 0x1–0x8 (patterns), 0xE, 0xF, or `Reserved` (0x9–0xD) |
-| `LtpRequests` | struct | The requests for all four lanes |
-| `FfeLevels` | struct | Highest TxFFE level index (0–7), written to `Config_1` |
-| `FrlConfig` | struct | `Config_1`: the rate and FFE levels |
-| `UpdateFlags` | struct | The `Update_0` training flags read and cleared |
-| `SourceTestConfig` | struct | `FLT_no_timeout` from `Source_Test_Configuration` |
-| `CedCount` | struct | 15-bit per-lane character error count |
-| `CedCounters` | struct | Per-lane `Option<CedCount>`; `lane3` is `None` in 3-lane mode |
-| `TrainingConfig` | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit |
-| `Trained` | struct | What `train` returns: the `outcome` and the attempt's `TrainingWarning`s |
-| `TrainingOutcome` | enum | `Success { achieved_rate }`, `FallbackRequired { reason }`, or `NoTimeoutHold { rate }` |
-| `TrainingWarning` | enum | A non-fatal anomaly, such as an undefined LTP request; repeats merged |
-| `FallbackReason` | enum | Why an attempt ended without a link |
-| `TrainingError` | enum | Hard failure: `Scdc { error, exit }` or `Phy { error, exit }`; `ExitFailed`; `InvalidRates`; or `NoRates` |
-| `TmdsExit` | enum | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, or `Skipped` |
-| `ExitError` | struct | A failed LTS:L: each end's first error (`scdc`, `phy`) |
-| `TrainingEvent` | enum | One trace event |
-| `TrainingTrace` | struct | The rates, config and ordered events of an attempt (`alloc` feature) |
+| Type               | Kind   | Notes                                                                                                     |
+|--------------------|--------|-----------------------------------------------------------------------------------------------------------|
+| `LtpReq`           | enum   | One lane's request: 0x0 (trained), 0x1–0x8 (patterns), 0xE, 0xF, or `Reserved` (0x9–0xD)                  |
+| `LtpRequests`      | struct | The requests for all four lanes                                                                           |
+| `FfeLevels`        | struct | Highest TxFFE level index (0–7), written to `Config_1`                                                    |
+| `FrlConfig`        | struct | `Config_1`: the rate and FFE levels                                                                       |
+| `UpdateFlags`      | struct | The `Update_0` training flags read and cleared                                                            |
+| `SourceTestConfig` | struct | `FLT_no_timeout` from `Source_Test_Configuration`                                                         |
+| `CedCount`         | struct | 15-bit per-lane character error count                                                                     |
+| `CedCounters`      | struct | Per-lane `Option<CedCount>`; `lane3` is `None` in 3-lane mode                                             |
+| `TrainingConfig`   | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit                                         |
+| `Trained`          | struct | What `train` returns: the `outcome` and the attempt's `TrainingWarning`s                                  |
+| `TrainingOutcome`  | enum   | `Success { achieved_rate }`, `FallbackRequired { reason }`, or `NoTimeoutHold { rate }`                   |
+| `TrainingWarning`  | enum   | A non-fatal anomaly, such as an undefined LTP request; repeats merged                                     |
+| `FallbackReason`   | enum   | Why an attempt ended without a link                                                                       |
+| `TrainingError`    | enum   | Hard failure: `Scdc { error, exit }` or `Phy { error, exit }`; `ExitFailed`; `InvalidRates`; or `NoRates` |
+| `TmdsExit`         | enum   | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, or `Skipped`                          |
+| `ExitError`        | struct | A failed LTS:L: each end's first error (`scdc`, `phy`)                                                    |
+| `TrainingEvent`    | enum   | One trace event                                                                                           |
+| `TrainingTrace`    | struct | The rates, config and ordered events of an attempt (`alloc` feature)                                      |
 
 ---
 
@@ -48,12 +48,12 @@ Async transports implement this trait; sync transports implement `plumbob::ScdcC
 
 The same shape as `plumbob::FrlTrainer<C, P>`, with different trait bounds:
 
-| | plumbob | plumbob-async |
-|---|---|---|
-| `C` bound | `plumbob::ScdcClient` | `plumbob_async::ScdcClient` |
-| `P` bound | `hdmi_hal::phy::HdmiPhy` | `hdmi_hal_async::phy::HdmiPhy` |
-| Training methods | `fn` | `async fn` |
-| State machine | `plumbob::lts::run` | `plumbob::lts::run` |
+|                  | plumbob                  | plumbob-async                  |
+|------------------|--------------------------|--------------------------------|
+| `C` bound        | `plumbob::ScdcClient`    | `plumbob_async::ScdcClient`    |
+| `P` bound        | `hdmi_hal::phy::HdmiPhy` | `hdmi_hal_async::phy::HdmiPhy` |
+| Training methods | `fn`                     | `async fn`                     |
+| State machine    | `plumbob::lts::run`      | `plumbob::lts::run`            |
 
 `new` and `into_parts` are not async; only the training methods are.
 
