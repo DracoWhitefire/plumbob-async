@@ -467,3 +467,32 @@ async fn undefined_requests_come_back_as_warnings() {
     };
     assert!(trained.iter_warnings().eq([warning].iter()));
 }
+
+#[pollster::test]
+async fn train_with_events_reports_each_event_over_async_io() {
+    let sink = Sink {
+        waits: true,
+        ..Sink::training(&[per_lane(), all(LtpReq::None)])
+    };
+    let mut events = Vec::new();
+    let trained = FrlTrainer::new(sink, Phy::default())
+        .train_with_events(&[RATE], &TrainingConfig::default(), &mut |event| {
+            events.push(event)
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        trained.outcome,
+        TrainingOutcome::Success {
+            achieved_rate: RATE
+        }
+    );
+    assert_eq!(
+        events.first(),
+        Some(&TrainingEvent::FltReady { after_polls: 2 })
+    );
+    assert!(matches!(
+        events.last(),
+        Some(TrainingEvent::FrlStart { .. })
+    ));
+}

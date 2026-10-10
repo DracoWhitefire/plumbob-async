@@ -37,6 +37,7 @@ The tests check:
 - `TrainingError::Scdc` and `TrainingError::Phy` carrying the error from every SCDC and
   PHY operation the state machine uses
 - The traced methods recording the rates, the config and the events (requires `alloc`)
+- `train_with_events` reporting each event as it occurs over waiting I/O, without `alloc`
 - `exit_to_tmds` over async I/O: the LTS:L steps reaching both ends, each end's error on
   failure, and recovering a `train` future dropped mid-training (polled by hand over
   waiting I/O, then dropped with the sink still configured for FRL)

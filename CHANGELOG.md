@@ -52,7 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   afterwards and to prefer the poll limits over external timeouts.
 - Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `SourceTestConfig`,
   `TmdsExit` and `ExitError`.
-  `TrainingEvent` is re-exported without the `alloc` feature.
+  `TrainingEvent` is re-exported without the `alloc` feature, and
+  `FrlTrainer::train_with_events` delivers each event to a callback as it occurs, so
+  targets without an allocator get the full reasoning too.
 
 - **SLSA Build Level 2 provenance** — release artifacts are attested via
   `actions/attest-build-provenance` and verified with

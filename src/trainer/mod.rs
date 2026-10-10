@@ -82,7 +82,7 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
         rates: &[HdmiForumFrl],
         config: &TrainingConfig,
     ) -> Result<Trained, Error<C, P>> {
-        self.run(rates, config, &mut |_| {}).await
+        self.train_with_events(rates, config, &mut |_| {}).await
     }
 
     /// Like [`train_at_rate`](Self::train_at_rate), and also returns a [`TrainingTrace`]
@@ -108,13 +108,16 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
     ) -> (Result<Trained, Error<C, P>>, TrainingTrace) {
         let mut events = Vec::new();
         let result = self
-            .run(rates, config, &mut |event| events.push(event))
+            .train_with_events(rates, config, &mut |event| events.push(event))
             .await;
         (result, TrainingTrace::new(rates.to_vec(), *config, events))
     }
 
-    /// Runs [`lts::run`] over this trainer's SCDC client and PHY.
-    async fn run<F: FnMut(TrainingEvent)>(
+    /// Like [`train`](Self::train), calling `record` with each [`TrainingEvent`] as it
+    /// occurs: the events [`train_traced`](Self::train_traced) collects, without an
+    /// allocator. `record` is a plain callback; it is called between I/O operations, never
+    /// while one is awaited.
+    pub async fn train_with_events<F: FnMut(TrainingEvent)>(
         &mut self,
         rates: &[HdmiForumFrl],
         config: &TrainingConfig,

@@ -133,6 +133,9 @@ for event in &trace.events {
 }
 ```
 
+Without an allocator, `train_with_events(&rates, &config, &mut |event| …).await` delivers
+the same events as they occur, to a plain callback.
+
 ## Features
 
 | Feature | Default | Description |
