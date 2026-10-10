@@ -26,7 +26,7 @@ pub use client::ScdcClient;
 pub use trainer::FrlTrainer;
 
 pub use plumbob::{
-    CedCount, CedCounters, FallbackReason, FfeLevels, FrlConfig, LtpReq, LtpRequests,
+    CedCount, CedCounters, ExitError, FallbackReason, FfeLevels, FrlConfig, LtpReq, LtpRequests,
     SourceTestConfig, TmdsExit, TrainingConfig, TrainingError, TrainingEvent, TrainingOutcome,
     UpdateFlags,
 };

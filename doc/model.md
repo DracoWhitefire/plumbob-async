@@ -26,7 +26,8 @@ For field-level documentation of each re-exported type, see
 | `TrainingOutcome` | enum | `Success { achieved_rate }` or `FallbackRequired { reason }` |
 | `FallbackReason` | enum | Why an attempt ended without a link |
 | `TrainingError` | enum | Hard I/O failure: `Scdc { error, exit }` or `Phy { error, exit }`; or `ExitFailed` |
-| `TmdsExit` | enum | What LTS:L did after an I/O failure: `Exited`, `Failed`, or `Skipped` |
+| `TmdsExit` | enum | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, or `Skipped` |
+| `ExitError` | struct | A failed LTS:L: each end's first error (`scdc`, `phy`) |
 | `TrainingEvent` | enum | One trace event |
 | `TrainingTrace` | struct | The rates, config and ordered events of an attempt (`alloc` feature) |
 

@@ -41,8 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `SourceTestConfig` and
-  `TmdsExit`.
+- Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `SourceTestConfig`,
+  `TmdsExit` and `ExitError`.
   `TrainingEvent` is re-exported without the `alloc` feature.
 
 - **SLSA Build Level 2 provenance** — release artifacts are attested via
