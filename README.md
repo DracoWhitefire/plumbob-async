@@ -194,7 +194,10 @@ or runtime crate.
 - **PHY vendor sequences** — plumbob-async calls `HdmiPhy` methods; the register
   sequences live in platform PHY backends.
 - **Timing and inter-poll delay** — the poll limits in `TrainingConfig` are the only
-  timeout mechanism; the interval belongs inside the polled `ScdcClient` methods.
+  timeout mechanism; the interval belongs inside the polled `ScdcClient` methods, and
+  awaiting it is what lets other tasks run: an `ScdcClient` whose futures are always
+  ready keeps the executor for the whole `train` call (up to 7000 polls with the
+  defaults; see plumbob's architecture document for the bound).
 - **Executor dependency** — no runtime crate is in the dependency graph.
 
 ## Documentation
