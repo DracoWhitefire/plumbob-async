@@ -198,7 +198,9 @@ or runtime crate.
   awaiting it is what lets other tasks run: an `ScdcClient` whose futures are always
   ready keeps the executor for the whole `train` call (up to 7000 polls with the
   defaults; see plumbob's architecture document for the bound).
-- **Executor dependency** — no runtime crate is in the dependency graph.
+- **Executor dependency** — no runtime crate is in the dependency graph. The futures are
+  not required to be `Send`: code generic over `ScdcClient` and `HdmiPhy` runs on a
+  single-threaded executor or keeps the types concrete (see the architecture document).
 
 ## Documentation
 

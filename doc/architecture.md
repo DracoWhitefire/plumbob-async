@@ -87,6 +87,14 @@ MSRV is `1.85`, which includes stable `async fn` in traits (stabilised in `1.75`
 trait is not object-safe — the same trade-offs `embedded-hal-async` and `hdmi-hal-async`
 accept.
 
+In practice: with concrete `ScdcClient` and `HdmiPhy` types whose futures are `Send`, the
+`train` future is `Send` and can be spawned on a multi-threaded Tokio runtime. A caller
+generic over `ScdcClient` and `HdmiPhy` cannot spawn it, whatever it bounds the types by;
+it runs on a single-threaded executor (Embassy, Tokio's current-thread runtime or
+`LocalSet`) or keeps the types concrete. `Send` variants of the traits, which lift this,
+are designed and proven in the stack design document ("Sync and Async Companions", "`Send` futures for multi-threaded executors") and deferred until the integration layer needs
+them.
+
 ---
 
 ## `FrlTrainer<C, P>`
