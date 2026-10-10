@@ -24,7 +24,7 @@ For field-level documentation of each re-exported type, see
 | `CedCounters` | struct | Per-lane `Option<CedCount>`; `lane3` is `None` in 3-lane mode |
 | `TrainingConfig` | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit |
 | `Trained` | struct | What `train` returns: the `outcome` and the attempt's `TrainingWarning`s |
-| `TrainingOutcome` | enum | `Success { achieved_rate }` or `FallbackRequired { reason }` |
+| `TrainingOutcome` | enum | `Success { achieved_rate }`, `FallbackRequired { reason }`, or `NoTimeoutHold { rate }` |
 | `TrainingWarning` | enum | A non-fatal anomaly, such as an undefined LTP request; repeats merged |
 | `FallbackReason` | enum | Why an attempt ended without a link |
 | `TrainingError` | enum | Hard I/O failure: `Scdc { error, exit }` or `Phy { error, exit }`; or `ExitFailed` |
@@ -66,6 +66,8 @@ These are `plumbob`'s types, re-exported unchanged:
 - **`FallbackRequired { reason }`** — no listed rate trained; `reason` says why, and the
   sink and PHY are back in TMDS. A normal protocol outcome; the caller decides what to do
   next.
+- **`NoTimeoutHold { rate }`** — the sink is under compliance test (`FLT_no_timeout`) and
+  the poll cap ran out; the link is left as it is for the test equipment.
 - **`TrainingError::Scdc { error, exit }` / `TrainingError::Phy { error, exit }`** — a
   hard I/O failure from the async SCDC client or PHY, unrelated to whether the link could
   have trained. LTS:L still runs afterwards, unless `exit_to_tmds_on_error` is off, and
