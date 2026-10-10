@@ -350,8 +350,13 @@ async fn traced_training_records_the_attempt() {
     assert_eq!(trace.rates, [RATE]);
     assert_eq!(trace.config, config);
     assert_eq!(
-        trace.events.first(),
-        Some(&TrainingEvent::FltReady { after_polls: 2 })
+        trace.events[..2],
+        [
+            TrainingEvent::SourceTestConfigRead {
+                flt_no_timeout: false
+            },
+            TrainingEvent::FltReady { after_polls: 2 },
+        ]
     );
     assert!(matches!(
         trace.events.last(),
@@ -488,8 +493,13 @@ async fn train_with_events_reports_each_event_over_async_io() {
         }
     );
     assert_eq!(
-        events.first(),
-        Some(&TrainingEvent::FltReady { after_polls: 2 })
+        events[..2],
+        [
+            TrainingEvent::SourceTestConfigRead {
+                flt_no_timeout: false
+            },
+            TrainingEvent::FltReady { after_polls: 2 },
+        ]
     );
     assert!(matches!(
         events.last(),
