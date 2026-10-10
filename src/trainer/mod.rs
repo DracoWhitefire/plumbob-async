@@ -8,8 +8,8 @@ use alloc::vec::Vec;
 
 use crate::client::ScdcClient;
 use crate::{
-    FrlConfig, LtpRequests, SourceTestConfig, TrainingConfig, TrainingError, TrainingEvent,
-    TrainingOutcome, UpdateFlags,
+    ExitError, FrlConfig, LtpRequests, SourceTestConfig, TrainingConfig, TrainingError,
+    TrainingEvent, TrainingOutcome, UpdateFlags,
 };
 
 #[cfg(feature = "alloc")]
@@ -23,6 +23,15 @@ type Error<C, P> = TrainingError<<C as ScdcClient>::Error, <P as HdmiPhy>::Error
 /// [`plumbob::lts::run`], awaiting each SCDC and PHY operation, so it yields to the
 /// executor wherever the I/O waits. Reusable across training attempts; use
 /// [`into_parts`](Self::into_parts) to recover the SCDC client and PHY.
+///
+/// # Cancellation
+///
+/// [`train`](Self::train) is not cancel-safe. Dropping its future — a `select!` against
+/// a hot-unplug, a `timeout` — stops training wherever it is: the sink may be configured
+/// for an FRL rate and the PHY driving training patterns, and no LTS:L runs, since a
+/// future cannot await anything once dropped. Call [`exit_to_tmds`](Self::exit_to_tmds)
+/// afterwards to return both ends to TMDS. Bounding training is better left to the poll
+/// limits in [`TrainingConfig`], which end every attempt in a defined state.
 pub struct FrlTrainer<C, P> {
     scdc: C,
     phy: P,
@@ -39,6 +48,22 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
         (self.scdc, self.phy)
     }
 
+    /// LTS:L on demand: stops the training patterns, returns the PHY to TMDS, turns FRL
+    /// off in `Config_1` and clears `FLT_update` if it is set.
+    ///
+    /// The async counterpart to [`plumbob::FrlTrainer::exit_to_tmds`]: for taking an FRL
+    /// link down when the display is disabled or unplugged, before a mode change, after
+    /// an error with [`TrainingConfig::exit_to_tmds_on_error`] off, and after a dropped
+    /// [`train`](Self::train) future (see [Cancellation](Self#cancellation)). Safe to call
+    /// in any state, and again. Every step is attempted even when one fails.
+    pub async fn exit_to_tmds(&mut self) -> Result<(), ExitError<C::Error, P::Error>> {
+        let mut io = AsyncIo {
+            scdc: &mut self.scdc,
+            phy: &mut self.phy,
+        };
+        lts::exit_to_tmds(&mut io, &mut |_| {}).await
+    }
+
     /// Trains at a single rate: `train(&[rate], config)`.
     pub async fn train_at_rate(
         &mut self,
@@ -51,7 +76,7 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
     /// Trains over `rates` in order, stepping down when the sink requests it.
     ///
     /// The async counterpart to [`plumbob::FrlTrainer::train`], with the same outcomes and
-    /// errors.
+    /// errors. Not cancel-safe: see [Cancellation](Self#cancellation).
     pub async fn train(
         &mut self,
         rates: &[HdmiForumFrl],

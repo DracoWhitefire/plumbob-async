@@ -80,7 +80,7 @@ re-exported from `plumbob` and are identical between the sync and async APIs.
 
 The procedure is plumbob's — LTS:2 (prepare), LTS:3 (train), LTS:P (pass), with LTS:4
 (lower rate) on the sink's request and LTS:L (exit to TMDS) before every
-`FallbackRequired` — because it is plumbob's code: `FrlTrainer` runs `plumbob::lts::run`
+`FallbackRequired` and after an I/O error — because it is plumbob's code: `FrlTrainer` runs `plumbob::lts::run`
 over its async SCDC client and PHY. See
 [plumbob's README](https://github.com/DracoWhitefire/plumbob#training-procedure) and
 architecture document for the states, the poll and retrain limits, and the per-lane rules.
@@ -88,6 +88,28 @@ architecture document for the states, the poll and retrain limits, and the per-l
 `FallbackRequired { reason }` means no listed rate trained; `TrainingError` means a hard
 I/O failure from the SCDC client or PHY. The two are kept distinct so a caller diagnosing
 a failure knows whether it came from the protocol or the bus.
+
+`trainer.exit_to_tmds().await` runs LTS:L on its own, to take a trained link down when
+the display is disabled or unplugged, or before a mode change.
+
+## Cancellation
+
+`train` is not cancel-safe. Dropping its future — losing a `select!` against a
+hot-unplug event, or hitting a `timeout` — stops training wherever it is, and a dropped
+future cannot run LTS:L: the sink may be left configured for an FRL rate and the PHY
+driving training patterns. After dropping one, return both ends to TMDS yourself:
+
+```rust
+select! {
+    result = trainer.train(&rates, &config) => handle(result),
+    _ = hot_unplug.wait() => {
+        trainer.exit_to_tmds().await?;
+    }
+}
+```
+
+To bound how long training takes, prefer the poll limits in `TrainingConfig`: every
+attempt that hits one ends in a defined state, with LTS:L already run.
 
 ## Diagnostics
 

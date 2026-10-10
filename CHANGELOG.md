@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`FrlTrainer::exit_to_tmds`** — LTS:L on demand, as in plumbob: to take an FRL link
+  down when the display is disabled or unplugged, before a mode change, or after a dropped
+  `train` future.
+- **Cancellation is documented**: `train` is not cancel-safe, since a dropped future
+  cannot run LTS:L; the README and architecture document say to call `exit_to_tmds`
+  afterwards and to prefer the poll limits over external timeouts.
 - Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `SourceTestConfig`,
   `TmdsExit` and `ExitError`.
   `TrainingEvent` is re-exported without the `alloc` feature.

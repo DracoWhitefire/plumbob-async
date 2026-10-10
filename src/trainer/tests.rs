@@ -372,3 +372,75 @@ async fn the_test_doubles_answer_the_operations_training_does_not_use() {
     assert_eq!(sink.read_ced().await, Err("read_ced"));
     assert!(Phy::default().set_scrambling(true).await.is_ok());
 }
+
+#[pollster::test]
+async fn exit_to_tmds_performs_lts_l_over_async_io() {
+    let sink = Sink {
+        configured: true,
+        waits: true,
+        ..Sink::default()
+    };
+    let phy = Phy {
+        waits: true,
+        ..Phy::default()
+    };
+    let mut trainer = FrlTrainer::new(sink, phy);
+    assert_eq!(trainer.exit_to_tmds().await, Ok(()));
+    let (sink, phy) = trainer.into_parts();
+    assert!(!sink.configured);
+    assert_eq!(phy.rates, [HdmiForumFrl::NotSupported]);
+    assert_eq!(phy.patterns, [LanePatterns::default()]);
+}
+
+#[pollster::test]
+async fn exit_to_tmds_reports_each_ends_error() {
+    let sink = Sink {
+        fail: Some("write_frl_config"),
+        ..Sink::default()
+    };
+    let mut trainer = FrlTrainer::new(sink, Phy::default());
+    let result = trainer.exit_to_tmds().await;
+    assert!(
+        matches!(
+            result,
+            Err(ExitError {
+                scdc: Some("write_frl_config"),
+                phy: None,
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+}
+
+#[pollster::test]
+async fn exit_to_tmds_recovers_a_dropped_train_future() {
+    // Training that waits on every operation and never passes, so it is still running
+    // when it is dropped.
+    let sink = Sink {
+        waits: true,
+        ..Sink::training(&[per_lane(); 64])
+    };
+    let phy = Phy {
+        waits: true,
+        ..Phy::default()
+    };
+    let mut trainer = FrlTrainer::new(sink, phy);
+    let config = TrainingConfig::default();
+    {
+        let mut train = core::pin::pin!(trainer.train(&[RATE], &config));
+        let mut cx = Context::from_waker(core::task::Waker::noop());
+        for _ in 0..40 {
+            assert!(train.as_mut().poll(&mut cx).is_pending());
+        }
+    }
+    assert!(
+        trainer.scdc.configured,
+        "the dropped future left the sink in FRL"
+    );
+
+    assert_eq!(trainer.exit_to_tmds().await, Ok(()));
+    let (sink, phy) = trainer.into_parts();
+    assert!(!sink.configured);
+    assert_eq!(phy.rates.last(), Some(&HdmiForumFrl::NotSupported));
+}

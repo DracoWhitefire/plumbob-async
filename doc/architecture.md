@@ -95,6 +95,7 @@ accept.
 impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
     pub fn new(scdc: C, phy: P) -> Self;
     pub fn into_parts(self) -> (C, P);
+    pub async fn exit_to_tmds(&mut self) -> Result<(), ExitError<C::Error, P::Error>>;
 
     pub async fn train(&mut self, rates: &[HdmiForumFrl], config: &TrainingConfig)
         -> Result<TrainingOutcome, TrainingError<C::Error, P::Error>>;
@@ -116,7 +117,22 @@ the training methods `async`.
 Each training method runs `plumbob::lts::run` over a private adapter that implements
 `plumbob::lts::TrainingIo` by `.await`ing the trainer's `ScdcClient` and `HdmiPhy`. The
 outcomes, errors and `TrainingEvent`s are therefore exactly plumbob's: a sync trace and an
-async trace of the same sink are identical.
+async trace of the same sink are identical. `exit_to_tmds` runs `plumbob::lts::exit_to_tmds`
+over the same adapter.
+
+### Cancellation
+
+`train` is not cancel-safe, and cannot be made so. Dropping its future stops the state
+machine at whichever `.await` it was suspended on — possibly with `Config_1` holding an
+FRL rate and the PHY driving per-lane patterns — and a dropped future cannot await
+anything, so no drop guard can run LTS:L; async I/O has no synchronous fallback to call
+from `Drop`. A transport transaction in flight may also be abandoned part-way.
+
+The trainer itself is unaffected: it holds no state between calls, so it can train again
+or run `exit_to_tmds` straight away. The documented recovery is that a caller who drops
+a `train` future calls `exit_to_tmds()` before anything else. Bounding training with an
+external timeout is discouraged in favour of `TrainingConfig`'s poll limits, which end
+every attempt in a defined state.
 
 ---
 
