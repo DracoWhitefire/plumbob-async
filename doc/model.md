@@ -27,7 +27,7 @@ For field-level documentation of each re-exported type, see
 | `TrainingOutcome` | enum | `Success { achieved_rate }`, `FallbackRequired { reason }`, or `NoTimeoutHold { rate }` |
 | `TrainingWarning` | enum | A non-fatal anomaly, such as an undefined LTP request; repeats merged |
 | `FallbackReason` | enum | Why an attempt ended without a link |
-| `TrainingError` | enum | Hard I/O failure: `Scdc { error, exit }` or `Phy { error, exit }`; or `ExitFailed` |
+| `TrainingError` | enum | Hard failure: `Scdc { error, exit }` or `Phy { error, exit }`; `ExitFailed`; or `InvalidRates` |
 | `TmdsExit` | enum | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, or `Skipped` |
 | `ExitError` | struct | A failed LTS:L: each end's first error (`scdc`, `phy`) |
 | `TrainingEvent` | enum | One trace event |
