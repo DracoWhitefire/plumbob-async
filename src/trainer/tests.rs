@@ -169,6 +169,8 @@ impl ScdcClient for Sink {
 struct Phy {
     rates: Vec<HdmiForumFrl>,
     patterns: Vec<LanePatterns>,
+    outputs: Vec<FrlOutput>,
+    equalization: Vec<EqParams>,
     waits: bool,
     fail: Option<&'static str>,
 }
@@ -188,12 +190,16 @@ impl HdmiPhy for Phy {
         Ok(())
     }
 
-    async fn set_frl_output(&mut self, _output: FrlOutput) -> Result<(), &'static str> {
-        operation(self.waits, self.fail, "set_frl_output").await
+    async fn set_frl_output(&mut self, output: FrlOutput) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "set_frl_output").await?;
+        self.outputs.push(output);
+        Ok(())
     }
 
-    async fn adjust_equalization(&mut self, _params: EqParams) -> Result<(), &'static str> {
-        operation(self.waits, self.fail, "adjust_equalization").await
+    async fn adjust_equalization(&mut self, params: EqParams) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "adjust_equalization").await?;
+        self.equalization.push(params);
+        Ok(())
     }
 
     async fn set_scrambling(&mut self, _enabled: bool) -> Result<(), &'static str> {
@@ -212,7 +218,7 @@ fn per_lane() -> LtpRequests {
 
 #[pollster::test]
 async fn trains_through_async_io() {
-    let sink = Sink::training(&[per_lane(), all(LtpReq::None)]);
+    let sink = Sink::training(&[per_lane(), all(LtpReq::FfeChange), all(LtpReq::None)]);
     let mut trainer = FrlTrainer::new(sink, Phy::default());
     let outcome = trainer.train(&[RATE], &TrainingConfig::default()).await;
     assert_eq!(
@@ -229,6 +235,21 @@ async fn trains_through_async_io() {
         lane2: Some(LtpPattern::Lfsr2),
         lane3: Some(LtpPattern::Lfsr3),
     }));
+    // Gap characters in LTS:2 and again in LTS:P.
+    assert_eq!(phy.outputs, [FrlOutput::GapOnly, FrlOutput::GapOnly]);
+    // LTS:2 resets every lane to level 0; the 0xE request raises every lane to 1.
+    let levels = |eq: &EqParams| {
+        (
+            [
+                eq.lane0.tx_ffe_level.value(),
+                eq.lane1.tx_ffe_level.value(),
+                eq.lane2.tx_ffe_level.value(),
+            ],
+            eq.lane3.map(|lane| lane.tx_ffe_level.value()),
+        )
+    };
+    let sent: Vec<_> = phy.equalization.iter().map(levels).collect();
+    assert_eq!(sent, [([0, 0, 0], Some(0)), ([1, 1, 1], Some(1))]);
 }
 
 #[cfg(feature = "alloc")]

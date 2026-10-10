@@ -22,14 +22,15 @@ The library itself imposes no executor constraint. Any runtime that can drive an
   per-lane requests posted with `FLT_update` once `Config_1` holds an FRL rate, then
   `FRL_start`. It can raise `Source_Test_Update`, fail any one operation, and make every
   operation wait.
-- `Phy` — an async `HdmiPhy` that records the rates and patterns it is given, with the
-  same failure and waiting options.
+- `Phy` — an async `HdmiPhy` that records the rates, patterns, output modes and
+  equalization it is given, with the same failure and waiting options.
 - Waiting is real: `WaitOnce` is a future that returns `Pending` once and wakes itself
   before completing, so the executor has to poll the training future again.
 
 The tests check:
 
-- A full training run through async I/O, with the per-lane patterns reaching the PHY
+- A full training run through async I/O, with the per-lane patterns, the gap-only output
+  and the TxFFE reset and raise reaching the PHY
 - **I/O that waits gives the same result** as I/O that does not, compared trace for trace
   (requires `alloc`)
 - A source test configuration being read (requires `alloc`)
