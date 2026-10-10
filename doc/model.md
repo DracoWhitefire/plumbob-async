@@ -25,7 +25,8 @@ For field-level documentation of each re-exported type, see
 | `TrainingConfig` | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit |
 | `TrainingOutcome` | enum | `Success { achieved_rate }` or `FallbackRequired { reason }` |
 | `FallbackReason` | enum | Why an attempt ended without a link |
-| `TrainingError` | enum | Hard I/O failure: `Scdc(e)` or `Phy(e)` |
+| `TrainingError` | enum | Hard I/O failure: `Scdc { error, exit }` or `Phy { error, exit }`; or `ExitFailed` |
+| `TmdsExit` | enum | What LTS:L did after an I/O failure: `Exited`, `Failed`, or `Skipped` |
 | `TrainingEvent` | enum | One trace event |
 | `TrainingTrace` | struct | The rates, config and ordered events of an attempt (`alloc` feature) |
 
@@ -62,8 +63,11 @@ These are `plumbob`'s types, re-exported unchanged:
 - **`FallbackRequired { reason }`** — no listed rate trained; `reason` says why, and the
   sink and PHY are back in TMDS. A normal protocol outcome; the caller decides what to do
   next.
-- **`TrainingError::Scdc(e)` / `TrainingError::Phy(e)`** — a hard I/O failure from the
-  async SCDC client or PHY, unrelated to whether the link could have trained.
+- **`TrainingError::Scdc { error, exit }` / `TrainingError::Phy { error, exit }`** — a
+  hard I/O failure from the async SCDC client or PHY, unrelated to whether the link could
+  have trained. LTS:L still runs afterwards, unless `exit_to_tmds_on_error` is off, and
+  `exit` says whether both ends reached TMDS. `TrainingError::ExitFailed` is a fallback
+  whose LTS:L failed. See plumbob's `model.md` for the details.
 
 ---
 

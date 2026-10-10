@@ -311,7 +311,10 @@ async fn scdc_and_phy_errors_are_returned() {
         let outcome = FrlTrainer::new(sink, Phy::default())
             .train(&[RATE], &TrainingConfig::default())
             .await;
-        assert_eq!(outcome, Err(TrainingError::Scdc(op)));
+        assert!(
+            matches!(outcome, Err(TrainingError::Scdc { error, .. }) if error == op),
+            "{op}"
+        );
     }
     for op in [
         "set_frl_rate",
@@ -326,7 +329,10 @@ async fn scdc_and_phy_errors_are_returned() {
         let outcome = FrlTrainer::new(Sink::training(&rounds), phy)
             .train(&[RATE], &TrainingConfig::default())
             .await;
-        assert_eq!(outcome, Err(TrainingError::Phy(op)));
+        assert!(
+            matches!(outcome, Err(TrainingError::Phy { error, .. }) if error == op),
+            "{op}"
+        );
     }
 }
 

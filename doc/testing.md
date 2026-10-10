@@ -34,8 +34,8 @@ The tests check:
   (requires `alloc`)
 - A source test configuration being read (requires `alloc`)
 - A fallback returning the PHY to TMDS
-- `TrainingError::Scdc` and `TrainingError::Phy` propagating from every SCDC and PHY
-  operation the state machine uses
+- `TrainingError::Scdc` and `TrainingError::Phy` carrying the error from every SCDC and
+  PHY operation the state machine uses
 - The traced methods recording the rates, the config and the events (requires `alloc`)
 
 The tests that compare or inspect traces are compiled only with the `alloc` feature. CI

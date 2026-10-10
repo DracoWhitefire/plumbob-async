@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`TrainingOutcome::FallbackRequired` carries a `reason`** (`FallbackReason`, now
   re-exported), and `TrainingConfig`, `LtpReq`, `FfeLevels`, `FrlConfig` and
   `TrainingEvent` follow plumbob's new definitions.
+- **`TrainingError` reports what happened to the link**, as in plumbob: an SCDC or PHY
+  error is followed by LTS:L, the variants are `Scdc { error, exit }` and
+  `Phy { error, exit }` with `exit` a `TmdsExit`, and a fallback whose LTS:L fails is
+  `ExitFailed { reason, scdc, phy }`. Turn the exit after an error off with
+  `TrainingConfig::exit_to_tmds_on_error`.
 - **`hdmi-hal-async` updated to 0.2**: `FrlTrainer`'s PHY implements hdmi-hal-async
   0.2's `HdmiPhy`. Implementations must take the per-lane `send_ltp(LanePatterns)`, add
   `set_frl_output(FrlOutput)`, use `LtpPattern`'s variants (HDMI 2.1 values; `new` is
@@ -34,7 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags` and `SourceTestConfig`.
+- Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `SourceTestConfig` and
+  `TmdsExit`.
   `TrainingEvent` is re-exported without the `alloc` feature.
 
 - **SLSA Build Level 2 provenance** — release artifacts are attested via
