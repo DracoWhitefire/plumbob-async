@@ -30,7 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Phy { error, exit }` with `exit` a `TmdsExit`, and a fallback whose LTS:L fails is
   `ExitFailed { reason, error }`. Turn the exit after an error off with
   `TrainingConfig::exit_to_tmds_on_error`; while the sink sets `FLT_no_timeout` an error
-  holds the link instead (`TmdsExit::HeldUnderTest`).
+  holds the link instead (`TmdsExit::HeldUnderTest`). A rate list the procedure cannot run
+  is rejected before any I/O with `InvalidRates { index, rate }` or `NoRates`, and
+  `TrainingError` is now `#[non_exhaustive]`.
+- **`TrainingOutcome::NoTimeoutHold { rate }`**, as in plumbob: while the sink sets
+  `FLT_no_timeout`, a poll cap that runs out leaves the link as it is for the test
+  equipment instead of falling back. Code matching on `TrainingOutcome` needs an arm for
+  it (the enum was already `#[non_exhaustive]`).
 - **`train` and `train_at_rate` return `Trained`**, as in plumbob: the outcome with the
   attempt's `TrainingWarning`s (`Trained`, `TrainingWarning` and `MAX_WARNINGS` are
   re-exported).

@@ -103,6 +103,10 @@ them.
 impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
     pub fn new(scdc: C, phy: P) -> Self;
     pub fn into_parts(self) -> (C, P);
+    pub fn scdc(&self) -> &C;
+    pub fn scdc_mut(&mut self) -> &mut C;
+    pub fn phy(&self) -> &P;
+    pub fn phy_mut(&mut self) -> &mut P;
     pub async fn exit_to_tmds(&mut self) -> Result<(), ExitError<C::Error, P::Error>>;
 
     pub async fn train(&mut self, rates: &[HdmiForumFrl], config: &TrainingConfig)

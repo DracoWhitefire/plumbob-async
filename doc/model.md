@@ -55,7 +55,8 @@ The same shape as `plumbob::FrlTrainer<C, P>`, with different trait bounds:
 | Training methods | `fn`                     | `async fn`                     |
 | State machine    | `plumbob::lts::run`      | `plumbob::lts::run`            |
 
-`new` and `into_parts` are not async; only the training methods are.
+`new`, `into_parts` and the accessors (`scdc`, `scdc_mut`, `phy`, `phy_mut`) are not
+async; the training methods and `exit_to_tmds` are.
 
 ---
 

@@ -75,6 +75,10 @@ for warning in trained.iter_warnings() {
 }
 ```
 
+After `Success`, start video on the PHY the trainer holds —
+`trainer.phy_mut().set_frl_output(FrlOutput::Active).await` — or on the PHY `into_parts`
+returns. `scdc`, `scdc_mut`, `phy` and `phy_mut` give access to both in between.
+
 The `HdmiPhy` bound on `P` is `hdmi_hal_async::phy::HdmiPhy`. The `FrlConfig`,
 `TrainingConfig`, `Trained`, `TrainingOutcome`, `TrainingWarning`, `TrainingError`, and
 all protocol types are re-exported from `plumbob` and are identical between the sync and
@@ -114,7 +118,9 @@ select! {
 ```
 
 To bound how long training takes, prefer the poll limits in `TrainingConfig`: every
-attempt that hits one ends in a defined state, with LTS:L already run.
+attempt that hits one ends in a defined state — with LTS:L already run, or, while the sink
+sets `FLT_no_timeout` (compliance testing), with the link held for the test equipment
+(`TrainingOutcome::NoTimeoutHold`).
 
 ## Diagnostics
 
