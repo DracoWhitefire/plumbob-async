@@ -53,8 +53,7 @@ Construct an `FrlTrainer` and train over the rates to try, highest first; the si
 requests for a lower rate step down through the list:
 
 ```rust
-use display_types::cea861::hdmi_forum::HdmiForumFrl;
-use plumbob_async::{FrlTrainer, TrainingConfig, TrainingOutcome};
+use plumbob_async::{FrlTrainer, HdmiForumFrl, TrainingConfig, TrainingOutcome};
 
 let mut trainer = FrlTrainer::new(scdc, phy);
 let config = TrainingConfig::default();

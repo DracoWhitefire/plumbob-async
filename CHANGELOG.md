@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`FrlTrainer::phy`, `phy_mut`, `scdc` and `scdc_mut`**, as in plumbob.
+- Re-exports of `HdmiForumFrl`, the async `HdmiPhy` and the PHY types, from
+  `hdmi-hal-async`, so callers and PHY implementations need no direct dependency on it.
 - **`FrlTrainer::exit_to_tmds`** — LTS:L on demand, as in plumbob: to take an FRL link
   down when the display is disabled or unplugged, before a mode change, or after a dropped
   `train` future.

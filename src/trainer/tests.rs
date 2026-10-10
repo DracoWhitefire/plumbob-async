@@ -527,3 +527,16 @@ async fn train_with_events_reports_each_event_over_async_io() {
         Some(TrainingEvent::FrlStart { .. })
     ));
 }
+
+#[pollster::test]
+async fn the_trainer_gives_access_to_its_client_and_phy() {
+    let mut trainer = FrlTrainer::new(Sink::default(), Phy::default());
+    trainer
+        .phy_mut()
+        .set_frl_output(FrlOutput::Active)
+        .await
+        .unwrap();
+    trainer.scdc_mut().read_flt_ready().await.unwrap();
+    assert_eq!(trainer.phy().outputs, [FrlOutput::Active]);
+    assert_eq!(trainer.scdc().flt_ready_polls, 1);
+}
