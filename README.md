@@ -65,16 +65,22 @@ let rates = [
     HdmiForumFrl::Rate6Gbps4Lanes,
 ];
 
-match trainer.train(&rates, &config).await? {
+let trained = trainer.train(&rates, &config).await?;
+match trained.outcome {
     TrainingOutcome::Success { achieved_rate } => println!("Trained at {achieved_rate:?}"),
     TrainingOutcome::FallbackRequired { reason } => println!("No FRL link: {reason:?}"),
     _ => {}
 }
+for warning in trained.iter_warnings() {
+    println!("Warning: {warning:?}");
+}
 ```
 
 The `HdmiPhy` bound on `P` is `hdmi_hal_async::phy::HdmiPhy`. The `FrlConfig`,
-`TrainingConfig`, `TrainingOutcome`, `TrainingError`, and all protocol types are
-re-exported from `plumbob` and are identical between the sync and async APIs.
+`TrainingConfig`, `Trained`, `TrainingOutcome`, `TrainingWarning`, `TrainingError`, and
+all protocol types are re-exported from `plumbob` and are identical between the sync and
+async APIs: `train` returns the outcome with the warnings the attempt produced, such as
+a sink requesting an undefined pattern value.
 
 ## Training procedure
 

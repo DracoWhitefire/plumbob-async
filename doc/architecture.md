@@ -98,16 +98,16 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
     pub async fn exit_to_tmds(&mut self) -> Result<(), ExitError<C::Error, P::Error>>;
 
     pub async fn train(&mut self, rates: &[HdmiForumFrl], config: &TrainingConfig)
-        -> Result<TrainingOutcome, TrainingError<C::Error, P::Error>>;
+        -> Result<Trained, TrainingError<C::Error, P::Error>>;
     pub async fn train_at_rate(&mut self, rate: HdmiForumFrl, config: &TrainingConfig)
-        -> Result<TrainingOutcome, TrainingError<C::Error, P::Error>>;
+        -> Result<Trained, TrainingError<C::Error, P::Error>>;
 
     #[cfg(feature = "alloc")]
     pub async fn train_traced(&mut self, rates: &[HdmiForumFrl], config: &TrainingConfig)
-        -> (Result<TrainingOutcome, TrainingError<C::Error, P::Error>>, TrainingTrace);
+        -> (Result<Trained, TrainingError<C::Error, P::Error>>, TrainingTrace);
     #[cfg(feature = "alloc")]
     pub async fn train_at_rate_traced(&mut self, rate: HdmiForumFrl, config: &TrainingConfig)
-        -> (Result<TrainingOutcome, TrainingError<C::Error, P::Error>>, TrainingTrace);
+        -> (Result<Trained, TrainingError<C::Error, P::Error>>, TrainingTrace);
 }
 ```
 
@@ -144,8 +144,8 @@ path:
 ```rust
 pub use plumbob::{
     CedCount, CedCounters, ExitError, FallbackReason, FfeLevels, FrlConfig, LtpReq,
-    LtpRequests, SourceTestConfig, TmdsExit, TrainingConfig, TrainingError, TrainingEvent,
-    TrainingOutcome, UpdateFlags,
+    LtpRequests, SourceTestConfig, TmdsExit, Trained, TrainingConfig, TrainingError,
+    TrainingEvent, TrainingOutcome, TrainingWarning, UpdateFlags, MAX_WARNINGS,
 };
 #[cfg(feature = "alloc")]
 pub use plumbob::TrainingTrace;

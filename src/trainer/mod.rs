@@ -8,8 +8,8 @@ use alloc::vec::Vec;
 
 use crate::client::ScdcClient;
 use crate::{
-    ExitError, FrlConfig, LtpRequests, SourceTestConfig, TrainingConfig, TrainingError,
-    TrainingEvent, TrainingOutcome, UpdateFlags,
+    ExitError, FrlConfig, LtpRequests, SourceTestConfig, Trained, TrainingConfig, TrainingError,
+    TrainingEvent, UpdateFlags,
 };
 
 #[cfg(feature = "alloc")]
@@ -69,7 +69,7 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
         &mut self,
         rate: HdmiForumFrl,
         config: &TrainingConfig,
-    ) -> Result<TrainingOutcome, Error<C, P>> {
+    ) -> Result<Trained, Error<C, P>> {
         self.train(&[rate], config).await
     }
 
@@ -81,7 +81,7 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
         &mut self,
         rates: &[HdmiForumFrl],
         config: &TrainingConfig,
-    ) -> Result<TrainingOutcome, Error<C, P>> {
+    ) -> Result<Trained, Error<C, P>> {
         self.run(rates, config, &mut |_| {}).await
     }
 
@@ -92,7 +92,7 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
         &mut self,
         rate: HdmiForumFrl,
         config: &TrainingConfig,
-    ) -> (Result<TrainingOutcome, Error<C, P>>, TrainingTrace) {
+    ) -> (Result<Trained, Error<C, P>>, TrainingTrace) {
         self.train_traced(&[rate], config).await
     }
 
@@ -105,7 +105,7 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
         &mut self,
         rates: &[HdmiForumFrl],
         config: &TrainingConfig,
-    ) -> (Result<TrainingOutcome, Error<C, P>>, TrainingTrace) {
+    ) -> (Result<Trained, Error<C, P>>, TrainingTrace) {
         let mut events = Vec::new();
         let result = self
             .run(rates, config, &mut |event| events.push(event))
@@ -119,7 +119,7 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
         rates: &[HdmiForumFrl],
         config: &TrainingConfig,
         record: &mut F,
-    ) -> Result<TrainingOutcome, Error<C, P>> {
+    ) -> Result<Trained, Error<C, P>> {
         let mut io = AsyncIo {
             scdc: &mut self.scdc,
             phy: &mut self.phy,

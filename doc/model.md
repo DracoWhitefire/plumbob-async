@@ -14,7 +14,7 @@ For field-level documentation of each re-exported type, see
 
 | Type | Kind | Notes |
 |---|---|---|
-| `LtpReq` | enum | One lane's request: 0x0 (trained), 0x1–0x8 (patterns), 0xE, 0xF |
+| `LtpReq` | enum | One lane's request: 0x0 (trained), 0x1–0x8 (patterns), 0xE, 0xF, or `Reserved` (0x9–0xD) |
 | `LtpRequests` | struct | The requests for all four lanes |
 | `FfeLevels` | struct | Highest TxFFE level index (0–7), written to `Config_1` |
 | `FrlConfig` | struct | `Config_1`: the rate and FFE levels |
@@ -23,7 +23,9 @@ For field-level documentation of each re-exported type, see
 | `CedCount` | struct | 15-bit per-lane character error count |
 | `CedCounters` | struct | Per-lane `Option<CedCount>`; `lane3` is `None` in 3-lane mode |
 | `TrainingConfig` | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit |
+| `Trained` | struct | What `train` returns: the `outcome` and the attempt's `TrainingWarning`s |
 | `TrainingOutcome` | enum | `Success { achieved_rate }` or `FallbackRequired { reason }` |
+| `TrainingWarning` | enum | A non-fatal anomaly, such as an undefined LTP request; repeats merged |
 | `FallbackReason` | enum | Why an attempt ended without a link |
 | `TrainingError` | enum | Hard I/O failure: `Scdc { error, exit }` or `Phy { error, exit }`; or `ExitFailed` |
 | `TmdsExit` | enum | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, or `Skipped` |

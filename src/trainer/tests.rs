@@ -13,7 +13,7 @@ use display_types::cea861::hdmi_forum::HdmiForumFrl;
 use hdmi_hal_async::LtpPattern;
 
 use super::*;
-use crate::{CedCounters, FallbackReason, LtpReq};
+use crate::{CedCounters, FallbackReason, LtpReq, TrainingOutcome, TrainingWarning};
 
 const RATE: HdmiForumFrl = HdmiForumFrl::Rate6Gbps4Lanes;
 
@@ -216,7 +216,7 @@ async fn trains_through_async_io() {
     let mut trainer = FrlTrainer::new(sink, Phy::default());
     let outcome = trainer.train(&[RATE], &TrainingConfig::default()).await;
     assert_eq!(
-        outcome,
+        outcome.map(|trained| trained.outcome),
         Ok(TrainingOutcome::Success {
             achieved_rate: RATE
         })
@@ -262,7 +262,7 @@ async fn a_source_test_configuration_is_read() {
         .train_traced(&[RATE], &TrainingConfig::default())
         .await;
     assert_eq!(
-        outcome,
+        outcome.map(|trained| trained.outcome),
         Ok(TrainingOutcome::Success {
             achieved_rate: RATE
         })
@@ -282,7 +282,7 @@ async fn a_fallback_returns_the_phy_to_tmds() {
     config.flt_ready_polls = 3;
     let outcome = trainer.train_at_rate(RATE, &config).await;
     assert_eq!(
-        outcome,
+        outcome.map(|trained| trained.outcome),
         Ok(TrainingOutcome::FallbackRequired {
             reason: FallbackReason::FltReadyTimeout
         })
@@ -342,7 +342,7 @@ async fn traced_training_records_the_attempt() {
     let mut trainer = FrlTrainer::new(Sink::training(&[all(LtpReq::None)]), Phy::default());
     let (outcome, trace) = trainer.train_at_rate_traced(RATE, &config).await;
     assert_eq!(
-        outcome,
+        outcome.map(|trained| trained.outcome),
         Ok(TrainingOutcome::Success {
             achieved_rate: RATE
         })
@@ -443,4 +443,27 @@ async fn exit_to_tmds_recovers_a_dropped_train_future() {
     let (sink, phy) = trainer.into_parts();
     assert!(!sink.configured);
     assert_eq!(phy.rates.last(), Some(&HdmiForumFrl::NotSupported));
+}
+
+#[pollster::test]
+async fn undefined_requests_come_back_as_warnings() {
+    let reserved = LtpRequests {
+        lane2: LtpReq::Reserved(0xC),
+        ..per_lane()
+    };
+    let sink = Sink {
+        waits: true,
+        ..Sink::training(&[reserved, all(LtpReq::None)])
+    };
+    let trained = FrlTrainer::new(sink, Phy::default())
+        .train(&[RATE], &TrainingConfig::default())
+        .await
+        .unwrap();
+    let warning = TrainingWarning::UndefinedLtpRequest {
+        lane: 2,
+        value: 0xC,
+        count: 1,
+        in_use: true,
+    };
+    assert!(trained.iter_warnings().eq([warning].iter()));
 }

@@ -27,8 +27,8 @@ pub use trainer::FrlTrainer;
 
 pub use plumbob::{
     CedCount, CedCounters, ExitError, FallbackReason, FfeLevels, FrlConfig, LtpReq, LtpRequests,
-    SourceTestConfig, TmdsExit, TrainingConfig, TrainingError, TrainingEvent, TrainingOutcome,
-    UpdateFlags,
+    MAX_WARNINGS, SourceTestConfig, TmdsExit, Trained, TrainingConfig, TrainingError,
+    TrainingEvent, TrainingOutcome, TrainingWarning, UpdateFlags,
 };
 
 #[cfg(feature = "alloc")]
