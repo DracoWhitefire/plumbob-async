@@ -74,7 +74,8 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
     ///
     /// The async counterpart to [`plumbob::FrlTrainer::exit_to_tmds`]: for taking an FRL
     /// link down when the display is disabled or unplugged, before a mode change, after
-    /// an error with [`TrainingConfig::exit_to_tmds_on_error`] off, and after a dropped
+    /// an error that did not lead to LTS:L (`TmdsExit::Skipped` or `HeldUnderTest`), and
+    /// after a dropped
     /// [`train`](Self::train) future (see [Cancellation](Self#cancellation)). Safe to call
     /// in any state, and again. Every step is attempted even when one fails.
     pub async fn exit_to_tmds(&mut self) -> Result<(), ExitError<C::Error, P::Error>> {

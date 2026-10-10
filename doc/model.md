@@ -28,7 +28,7 @@ For field-level documentation of each re-exported type, see
 | `TrainingWarning`  | enum   | A non-fatal anomaly, such as an undefined LTP request; repeats merged                                     |
 | `FallbackReason`   | enum   | Why an attempt ended without a link                                                                       |
 | `TrainingError`    | enum   | Hard failure: `Scdc { error, exit }` or `Phy { error, exit }`; `ExitFailed`; `InvalidRates`; or `NoRates` |
-| `TmdsExit`         | enum   | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, or `Skipped`                          |
+| `TmdsExit`         | enum   | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, `Skipped` or `HeldUnderTest`                          |
 | `ExitError`        | struct | A failed LTS:L: each end's first error (`scdc`, `phy`)                                                    |
 | `TrainingEvent`    | enum   | One trace event                                                                                           |
 | `TrainingTrace`    | struct | The rates, config and ordered events of an attempt (`alloc` feature)                                      |
@@ -70,7 +70,8 @@ These are `plumbob`'s types, re-exported unchanged:
   the poll cap ran out; the link is left as it is for the test equipment.
 - **`TrainingError::Scdc { error, exit }` / `TrainingError::Phy { error, exit }`** — a
   hard I/O failure from the async SCDC client or PHY, unrelated to whether the link could
-  have trained. LTS:L still runs afterwards, unless `exit_to_tmds_on_error` is off, and
+  have trained. LTS:L still runs afterwards, unless `exit_to_tmds_on_error` is off or
+  the sink had set `FLT_no_timeout` (`HeldUnderTest`), and
   `exit` says whether both ends reached TMDS. `TrainingError::ExitFailed` is a fallback
   whose LTS:L failed. See plumbob's `model.md` for the details.
 

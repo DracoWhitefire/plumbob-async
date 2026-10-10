@@ -28,8 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`TrainingError` reports what happened to the link**, as in plumbob: an SCDC or PHY
   error is followed by LTS:L, the variants are `Scdc { error, exit }` and
   `Phy { error, exit }` with `exit` a `TmdsExit`, and a fallback whose LTS:L fails is
-  `ExitFailed { reason, scdc, phy }`. Turn the exit after an error off with
-  `TrainingConfig::exit_to_tmds_on_error`.
+  `ExitFailed { reason, error }`. Turn the exit after an error off with
+  `TrainingConfig::exit_to_tmds_on_error`; while the sink sets `FLT_no_timeout` an error
+  holds the link instead (`TmdsExit::HeldUnderTest`).
 - **`train` and `train_at_rate` return `Trained`**, as in plumbob: the outcome with the
   attempt's `TrainingWarning`s (`Trained`, `TrainingWarning` and `MAX_WARNINGS` are
   re-exported).
