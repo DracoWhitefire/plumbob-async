@@ -92,13 +92,14 @@ a failure knows whether it came from the protocol or the bus.
 ## Diagnostics
 
 Enable the `alloc` feature to get `train_traced` (and `train_at_rate_traced`), which
-return a `TrainingTrace` alongside the outcome. The trace and its `TrainingEvent`s are
-plumbob's: a sync trace and an async trace of the same sink are identical.
+return a `TrainingTrace` alongside the result, whether that is an outcome or an error.
+The trace and its `TrainingEvent`s are plumbob's: a sync trace and an async trace of the
+same sink are identical.
 
 ```rust
-let (outcome, trace) = trainer.train_traced(&rates, &config).await?;
+let (result, trace) = trainer.train_traced(&rates, &config).await;
 
-println!("Outcome: {outcome:?}");
+println!("Result: {result:?}");
 for event in &trace.events {
     println!("  {event:?}");
 }

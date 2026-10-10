@@ -103,10 +103,10 @@ impl<C: ScdcClient, P: HdmiPhy> FrlTrainer<C, P> {
 
     #[cfg(feature = "alloc")]
     pub async fn train_traced(&mut self, rates: &[HdmiForumFrl], config: &TrainingConfig)
-        -> Result<(TrainingOutcome, TrainingTrace), TrainingError<C::Error, P::Error>>;
+        -> (Result<TrainingOutcome, TrainingError<C::Error, P::Error>>, TrainingTrace);
     #[cfg(feature = "alloc")]
     pub async fn train_at_rate_traced(&mut self, rate: HdmiForumFrl, config: &TrainingConfig)
-        -> Result<(TrainingOutcome, TrainingTrace), TrainingError<C::Error, P::Error>>;
+        -> (Result<TrainingOutcome, TrainingError<C::Error, P::Error>>, TrainingTrace);
 }
 ```
 

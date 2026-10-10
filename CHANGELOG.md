@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Phy { error, exit }` with `exit` a `TmdsExit`, and a fallback whose LTS:L fails is
   `ExitFailed { reason, scdc, phy }`. Turn the exit after an error off with
   `TrainingConfig::exit_to_tmds_on_error`.
+- **The traced methods return the trace whatever the result**, as in plumbob:
+  `(Result<TrainingOutcome, TrainingError>, TrainingTrace)`.
 - **`hdmi-hal-async` updated to 0.2**: `FrlTrainer`'s PHY implements hdmi-hal-async
   0.2's `HdmiPhy`. Implementations must take the per-lane `send_ltp(LanePatterns)`, add
   `set_frl_output(FrlOutput)`, use `LtpPattern`'s variants (HDMI 2.1 values; `new` is

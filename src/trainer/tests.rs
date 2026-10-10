@@ -249,7 +249,7 @@ async fn io_that_waits_gives_the_same_result() {
     let config = TrainingConfig::default();
     let expected = sync_like.train_traced(&[RATE], &config).await;
     let actual = waiting.train_traced(&[RATE], &config).await;
-    assert!(expected.is_ok());
+    assert!(expected.0.is_ok());
     assert_eq!(actual, expected);
 }
 
@@ -260,13 +260,12 @@ async fn a_source_test_configuration_is_read() {
     let mut trainer = FrlTrainer::new(sink, Phy::default());
     let (outcome, trace) = trainer
         .train_traced(&[RATE], &TrainingConfig::default())
-        .await
-        .unwrap();
+        .await;
     assert_eq!(
         outcome,
-        TrainingOutcome::Success {
+        Ok(TrainingOutcome::Success {
             achieved_rate: RATE
-        }
+        })
     );
     assert_eq!(
         trace.events.first(),
@@ -341,12 +340,12 @@ async fn scdc_and_phy_errors_are_returned() {
 async fn traced_training_records_the_attempt() {
     let config = TrainingConfig::default();
     let mut trainer = FrlTrainer::new(Sink::training(&[all(LtpReq::None)]), Phy::default());
-    let (outcome, trace) = trainer.train_at_rate_traced(RATE, &config).await.unwrap();
+    let (outcome, trace) = trainer.train_at_rate_traced(RATE, &config).await;
     assert_eq!(
         outcome,
-        TrainingOutcome::Success {
+        Ok(TrainingOutcome::Success {
             achieved_rate: RATE
-        }
+        })
     );
     assert_eq!(trace.rates, [RATE]);
     assert_eq!(trace.config, config);
