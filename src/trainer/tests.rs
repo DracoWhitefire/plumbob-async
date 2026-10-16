@@ -51,12 +51,12 @@ async fn operation(
 }
 
 fn all(req: LtpReq) -> LtpRequests {
-    LtpRequests {
-        lane0: req,
-        lane1: req,
-        lane2: req,
-        lane3: req,
-    }
+    LtpRequests::new(
+        req,
+        req,
+        req,
+        req,
+    )
 }
 
 /// A scripted sink: `FLT_ready` after `flt_ready_after` polls, then each set of requests
@@ -77,10 +77,7 @@ impl Sink {
     /// A sink that raises `Source_Test_Update` before training.
     fn with_source_test(self) -> Self {
         Self {
-            flags: UpdateFlags {
-                source_test_update: true,
-                ..UpdateFlags::default()
-            },
+            flags: UpdateFlags::new(true, false, false, false, false, false, false),
             ..self
         }
     }
@@ -119,7 +116,10 @@ impl ScdcClient for Sink {
         Ok(self.flags)
     }
 
-    async fn clear_update_flags(&mut self, flags: UpdateFlags) -> Result<(), &'static str> {
+    async fn clear_update_flags(
+        &mut self,
+        flags: ClearableUpdateFlags,
+    ) -> Result<(), &'static str> {
         operation(self.waits, self.fail, "clear_update_flags").await?;
         if flags.flt_update && self.flags.flt_update {
             self.flags.flt_update = false;
@@ -149,18 +149,13 @@ impl ScdcClient for Sink {
 
     async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), &'static str> {
         operation(self.waits, self.fail, "write_frl_config").await?;
-        self.configured = config.rate != HdmiForumFrl::NotSupported;
+        self.configured = config.frl_rate != HdmiForumFrl::NotSupported;
         Ok(())
     }
 
     async fn read_ced(&mut self) -> Result<CedCounters, &'static str> {
         operation(self.waits, self.fail, "read_ced").await?;
-        Ok(CedCounters {
-            lane0: None,
-            lane1: None,
-            lane2: None,
-            lane3: None,
-        })
+        Ok(CedCounters::new(None, None, None, None))
     }
 }
 
@@ -208,12 +203,12 @@ impl HdmiPhy for Phy {
 }
 
 fn per_lane() -> LtpRequests {
-    LtpRequests {
-        lane0: LtpReq::Lfsr0,
-        lane1: LtpReq::Lfsr1,
-        lane2: LtpReq::Lfsr2,
-        lane3: LtpReq::Lfsr3,
-    }
+    LtpRequests::new(
+        LtpReq::Lfsr0,
+        LtpReq::Lfsr1,
+        LtpReq::Lfsr2,
+        LtpReq::Lfsr3,
+    )
 }
 
 #[pollster::test]
@@ -517,7 +512,14 @@ async fn train_with_events_reports_each_event_over_async_io() {
         events[..2],
         [
             TrainingEvent::SourceTestConfigRead {
-                flt_no_timeout: false
+                config: SourceTestConfig {
+                    txffe_pre_shoot_only: false,
+                    txffe_de_emphasis_only: false,
+                    txffe_no_ffe: false,
+                    flt_no_timeout: false,
+                    dsc_frl_max: false,
+                    frl_max: false,
+                },
             },
             TrainingEvent::FltReady { after_polls: 2 },
         ]
