@@ -1,3 +1,4 @@
+use plumbob::ClearableUpdateFlags;
 use crate::{CedCounters, FrlConfig, LtpRequests, SourceTestConfig, UpdateFlags};
 
 /// Async typed SCDC interface required by the FRL training state machine.
@@ -24,7 +25,7 @@ pub trait ScdcClient {
     /// Clear the given `Update_0` flags (write 1 to clear).
     ///
     /// Async counterpart to [`plumbob::ScdcClient::clear_update_flags`].
-    async fn clear_update_flags(&mut self, flags: UpdateFlags) -> Result<(), Self::Error>;
+    async fn clear_update_flags(&mut self, flags: ClearableUpdateFlags) -> Result<(), Self::Error>;
 
     /// Read the per-lane link training requests from `Status_Flags_1/2`.
     ///

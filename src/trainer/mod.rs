@@ -1,6 +1,7 @@
 use display_types::cea861::hdmi_forum::HdmiForumFrl;
 use hdmi_hal_async::phy::HdmiPhy;
 use hdmi_hal_async::{EqParams, FrlOutput, LanePatterns};
+use plumbob::ClearableUpdateFlags;
 use plumbob::lts::{self, TrainingIo};
 
 #[cfg(feature = "alloc")]
@@ -171,7 +172,7 @@ impl<C: ScdcClient, P: HdmiPhy> TrainingIo for AsyncIo<'_, C, P> {
         self.scdc.read_update_flags().await
     }
 
-    async fn clear_update_flags(&mut self, flags: UpdateFlags) -> Result<(), C::Error> {
+    async fn clear_update_flags(&mut self, flags: ClearableUpdateFlags) -> Result<(), C::Error> {
         self.scdc.clear_update_flags(flags).await
     }
 
