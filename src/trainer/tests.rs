@@ -14,8 +14,8 @@ use hdmi_hal_async::LtpPattern;
 
 use super::*;
 use crate::{
-    CedCounters, FallbackReason, LtpReq, SendHdmiPhy, SendScdcClient, TrainingOutcome,
-    TrainingWarning, TxFfeRestrictions,
+    CedCount, CedCounters, FallbackReason, FfeLevels, LtpReq, SendHdmiPhy, SendScdcClient,
+    TrainingOutcome, TrainingWarning, TxFfeRestrictions,
 };
 
 const RATE: HdmiForumFrl = HdmiForumFrl::Rate6Gbps4Lanes;
@@ -60,6 +60,7 @@ fn all(req: LtpReq) -> LtpRequests {
 /// A scripted sink: `FLT_ready` after `flt_ready_after` polls, then each set of requests
 /// posted with `FLT_update` in turn once `Config_1` holds a rate, then `FRL_start`. A
 /// `source_test_change` is applied, with `Source_Test_Update`, on the first poll after that.
+/// It records the flags it is asked to clear and the writes it receives.
 #[derive(Default)]
 struct Sink {
     flt_ready_after: Option<u32>,
@@ -70,9 +71,30 @@ struct Sink {
     flags: UpdateFlags,
     source_test: SourceTestConfig,
     source_test_change: Option<SourceTestConfig>,
+    cleared: Vec<ClearableUpdateFlags>,
+    config_0_writes: u32,
+    frl_configs: Vec<FrlConfig>,
     waits: bool,
     fail: Option<&'static str>,
 }
+
+/// What `Sink::read_ced` returns: distinct per lane, so a forwarding mistake shows.
+fn ced() -> CedCounters {
+    CedCounters::new(
+        Some(CedCount::new(1)),
+        Some(CedCount::new(2)),
+        Some(CedCount::new(3)),
+        None,
+    )
+}
+
+// The flags plumbob clears, one at a time: `Source_Test_Update`, `FRL_start`, `FLT_update`.
+const SOURCE_TEST_UPDATE: ClearableUpdateFlags =
+    ClearableUpdateFlags::new(false, false, true, false, false, false);
+const FRL_START: ClearableUpdateFlags =
+    ClearableUpdateFlags::new(false, false, false, true, false, false);
+const FLT_UPDATE: ClearableUpdateFlags =
+    ClearableUpdateFlags::new(false, false, false, false, true, false);
 
 impl Sink {
     /// A sink that raises `Source_Test_Update` before training.
@@ -125,6 +147,7 @@ impl ScdcClient for Sink {
         flags: ClearableUpdateFlags,
     ) -> Result<(), &'static str> {
         operation(self.waits, self.fail, "clear_update_flags").await?;
+        self.cleared.push(flags);
         if flags.flt_update && self.flags.flt_update {
             self.flags.flt_update = false;
             self.rounds.pop_front();
@@ -148,18 +171,21 @@ impl ScdcClient for Sink {
     }
 
     async fn write_config_0_defaults(&mut self) -> Result<(), &'static str> {
-        operation(self.waits, self.fail, "write_config_0_defaults").await
+        operation(self.waits, self.fail, "write_config_0_defaults").await?;
+        self.config_0_writes += 1;
+        Ok(())
     }
 
     async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), &'static str> {
         operation(self.waits, self.fail, "write_frl_config").await?;
+        self.frl_configs.push(config);
         self.configured = config.frl_rate != HdmiForumFrl::NotSupported;
         Ok(())
     }
 
     async fn read_ced(&mut self) -> Result<CedCounters, &'static str> {
         operation(self.waits, self.fail, "read_ced").await?;
-        Ok(CedCounters::new(None, None, None, None))
+        Ok(ced())
     }
 }
 
@@ -222,7 +248,19 @@ async fn trains_through_async_io() {
             ..
         })
     ));
-    let (_, phy) = trainer.into_parts();
+    let (sink, phy) = trainer.into_parts();
+    // The flags reach the sink exactly as plumbob clears them: `FLT_update` in LTS:2 and
+    // after each round of requests, then `FRL_start`.
+    assert_eq!(
+        sink.cleared,
+        [FLT_UPDATE, FLT_UPDATE, FLT_UPDATE, FLT_UPDATE, FRL_START]
+    );
+    assert!(!sink.flags.frl_start);
+    assert_eq!(sink.config_0_writes, 1);
+    assert_eq!(
+        sink.frl_configs,
+        [FrlConfig::new(RATE, FfeLevels::new(3).unwrap())]
+    );
     assert_eq!(phy.rates, [RATE]);
     assert!(phy.patterns.contains(&LanePatterns {
         lane0: Some(LtpPattern::Lfsr0),
@@ -296,6 +334,7 @@ async fn a_source_test_update_during_training_reaches_the_phy() {
     assert_eq!(reads, [SourceTestConfig::default(), no_ffe]);
     let (sink, phy) = trainer.into_parts();
     assert!(!sink.flags.source_test_update);
+    assert!(sink.cleared.contains(&SOURCE_TEST_UPDATE));
     // The equalization of LTS:2's rate setup, then the re-send with the new restrictions.
     let restrictions: Vec<TxFfeRestrictions> = phy
         .equalization
@@ -376,7 +415,9 @@ async fn scdc_and_phy_errors_are_returned() {
 #[cfg(feature = "alloc")]
 #[pollster::test]
 async fn traced_training_records_the_attempt() {
-    let config = TrainingConfig::default();
+    // Not the default, so the trace shows the config it was given.
+    let mut config = TrainingConfig::default();
+    config.flt_ready_polls = 49;
     let mut trainer = FrlTrainer::new(Sink::training(&[all(LtpReq::None)]), Phy::default());
     let (outcome, trace) = trainer.train_at_rate_traced(RATE, &config).await;
     assert!(matches!(
@@ -662,6 +703,14 @@ fn spawnable<'a, C: SendScdcClient, P: SendHdmiPhy>(
     train_exit_train(trainer, config, events)
 }
 
+/// `read_ced` through the blanket implementation, as a future that must be `Send`:
+/// training never calls it, so `spawnable` does not check it.
+fn read_ced_spawnable<C: SendScdcClient>(
+    client: &mut C,
+) -> impl Future<Output = Result<CedCounters, C::Error>> + Send + '_ {
+    ScdcClient::read_ced(client)
+}
+
 #[pollster::test]
 async fn the_send_twins_train_in_generic_send_code() {
     let sink = Sink {
@@ -686,6 +735,60 @@ async fn the_send_twins_train_in_generic_send_code() {
     assert!(events > 0);
     // The operations training does not use, through the blanket implementations.
     let (mut sink, mut phy) = trainer.into_parts();
-    assert!(ScdcClient::read_ced(&mut sink).await.is_ok());
+    assert_eq!(read_ced_spawnable(&mut sink).await, Ok(ced()));
     assert_eq!(HdmiPhy::set_scrambling(&mut phy, true).await, Ok(()));
+}
+
+/// Runs `trainer` with events over the default config, and returns the result, the
+/// events and both ends.
+async fn run_with_events<C: ScdcClient, P: HdmiPhy>(
+    mut trainer: FrlTrainer<C, P>,
+) -> (
+    Result<Trained, TrainingError<C::Error, P::Error>>,
+    Vec<TrainingEvent>,
+    C,
+    P,
+) {
+    let mut events = Vec::new();
+    let result = trainer
+        .train_with_events(&[RATE], &TrainingConfig::default(), &mut |event| {
+            events.push(event)
+        })
+        .await;
+    let (scdc, phy) = trainer.into_parts();
+    (result, events, scdc, phy)
+}
+
+/// The scripted sink both runs of the twin comparison use: it waits, changes its source
+/// test configuration in LTS:3 and asks for an FFE change.
+fn comparison_sink() -> Sink {
+    let mut no_ffe = SourceTestConfig::default();
+    no_ffe.txffe_no_ffe = true;
+    Sink {
+        waits: true,
+        source_test_change: Some(no_ffe),
+        ..Sink::training(&[per_lane(), all(LtpReq::FfeChange), all(LtpReq::None)])
+    }
+}
+
+#[pollster::test]
+async fn the_send_twin_forwards_every_operation_unchanged() {
+    // The same sink through the plain client and through the twin: every value the
+    // blanket implementation forwards shows up in the events or in what the ends recorded.
+    let (plain, plain_events, plain_sink, plain_phy) =
+        run_with_events(FrlTrainer::new(comparison_sink(), Phy::default())).await;
+    let (twin, twin_events, SendSink(twin_sink), SendPhy(twin_phy)) = run_with_events(
+        FrlTrainer::new(SendSink(comparison_sink()), SendPhy(Phy::default())),
+    )
+    .await;
+    assert!(plain.is_ok());
+    assert_eq!(twin, plain);
+    assert_eq!(twin_events, plain_events);
+    assert_eq!(twin_sink.cleared, plain_sink.cleared);
+    assert_eq!(twin_sink.config_0_writes, plain_sink.config_0_writes);
+    assert_eq!(twin_sink.frl_configs, plain_sink.frl_configs);
+    assert_eq!(twin_phy.rates, plain_phy.rates);
+    assert_eq!(twin_phy.patterns, plain_phy.patterns);
+    assert_eq!(twin_phy.outputs, plain_phy.outputs);
+    assert_eq!(twin_phy.equalization, plain_phy.equalization);
 }
