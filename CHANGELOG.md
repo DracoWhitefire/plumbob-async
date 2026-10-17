@@ -58,9 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ScdcClient` fills every field in `read_update_flags` and `read_source_test_config`, and
   its `clear_update_flags` takes a `ClearableUpdateFlags`: every flag but `RR_Test`, which
   the source never clears.
-- **`plumbob` updated to 0.3**: `FrlTrainer` runs plumbob 0.3's state machine and
+- **`plumbob` updated to 0.3.1**: `FrlTrainer` runs plumbob 0.3's state machine and
   re-exports its types; the entries marked "as in plumbob" come from it. See plumbob's
-  changelog.
+  changelog. 0.3.1 is needed for `Send` futures: earlier releases kept state in the
+  training future that is not `Send`.
 - **`hdmi-hal-async` updated to 0.2.1**: `FrlTrainer`'s PHY implements hdmi-hal-async
   0.2's `HdmiPhy`. Implementations must take the per-lane `send_ltp(LanePatterns)`, add
   `set_frl_output(FrlOutput)`, use `LtpPattern`'s variants (HDMI 2.1 values; `new` is
