@@ -23,6 +23,8 @@ The library itself imposes no executor constraint. Any runtime that can drive an
   `FRL_start`. It can raise `Source_Test_Update` before training, change
   `Source_Test_Configuration` (raising `Source_Test_Update`) once LTS:3 begins, fail any
   one operation, and make every operation wait.
+- `SendSink` and `SendPhy` — the same doubles behind the `Send` twins, `SendScdcClient`
+  and `SendHdmiPhy`.
 - `Phy` — an async `HdmiPhy` that records the rates, patterns, output modes and
   equalization it is given, with the same failure and waiting options.
 - Waiting is real: `WaitOnce` is a future that returns `Pending` once and wakes itself
@@ -41,6 +43,10 @@ The tests check:
   PHY operation the state machine uses
 - The traced methods recording the rates, the config and the events (requires `alloc`)
 - `train_with_events` reporting each event as it occurs over waiting I/O, without `alloc`
+- **The `Send` twins in generic code**: a function generic over `SendScdcClient` and
+  `SendHdmiPhy` must return a `Send` future that trains, runs `exit_to_tmds`, trains with
+  events and (with `alloc`) traced; it compiles only if all of them are `Send`, and it runs
+  over waiting I/O
 - `exit_to_tmds` over async I/O: the LTS:L steps reaching both ends, each end's error on
   failure, and recovering a `train` future dropped mid-training (polled by hand over
   waiting I/O, then dropped with the sink still configured for FRL)

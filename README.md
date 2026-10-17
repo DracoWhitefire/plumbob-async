@@ -85,6 +85,45 @@ all protocol types are re-exported from `plumbob` and are identical between the 
 async APIs: `train` returns the outcome with the warnings the attempt produced, such as
 a sink requesting an undefined pattern value.
 
+### Multi-threaded executors
+
+The plain traits promise nothing about their futures, so code generic over `ScdcClient`
+and `HdmiPhy` cannot spawn training on a multi-threaded executor. For that, implement the
+`Send` twins, `SendScdcClient` and hdmi-hal-async's `SendHdmiPhy` (re-exported): the same
+methods, returning futures that are `Send`, with errors that are `Send`. With both,
+the futures of `train`, the other training methods and `exit_to_tmds` are `Send` in
+generic code:
+
+```rust
+use plumbob_async::{FrlTrainer, HdmiForumFrl, SendHdmiPhy, SendScdcClient, TrainingConfig};
+
+impl SendScdcClient for MyThreadSafeScdcClient {
+    type Error = MyError;
+
+    async fn read_flt_ready(&mut self) -> Result<bool, MyError> { todo!() }
+    // … the other seven methods, as for `ScdcClient`
+}
+
+fn spawn_training<C, P>(mut trainer: FrlTrainer<C, P>, rates: &'static [HdmiForumFrl])
+where
+    C: SendScdcClient + 'static,
+    P: SendHdmiPhy + 'static,
+{
+    tokio::spawn(async move {
+        match trainer.train(rates, &TrainingConfig::default()).await {
+            Ok(trained) => println!("{:?}", trained.outcome),
+            Err(_) => println!("training failed"),
+        }
+    });
+}
+```
+
+A twin implementation is also an implementation of the plain trait, so it works with
+code written against either. Import the trait your code is bounded by: with both in
+scope, method calls on a twin implementation are ambiguous. Code that keeps the types
+concrete needs no twins: its `train` future is `Send` when the client's and PHY's futures
+are.
+
 ## Training procedure
 
 The procedure is plumbob's — LTS:2 (prepare), LTS:3 (train), LTS:P (pass), with LTS:4
@@ -212,9 +251,9 @@ or runtime crate.
   other tasks run: an `ScdcClient` whose futures are always ready keeps the executor for
   the whole `train` call (up to 7000 polls with the defaults; see plumbob's architecture
   document for the bound).
-- **Executor dependency** — no runtime crate is in the dependency graph. The futures are
-  not required to be `Send`: code generic over `ScdcClient` and `HdmiPhy` runs on a
-  single-threaded executor or keeps the types concrete (see the architecture document).
+- **Executor dependency** — no runtime crate is in the dependency graph. The plain
+  traits' futures are not required to be `Send`; for a multi-threaded executor, implement
+  the `Send` twins (see "Multi-threaded executors").
 
 ## Documentation
 

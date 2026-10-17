@@ -40,10 +40,17 @@ For field-level documentation of each re-exported type, see
 
 ### `ScdcClient`
 
-The only trait defined in this crate: the async counterpart of `plumbob::ScdcClient`,
-with the same eight operations, meaning and implementer obligations, each an `async fn`.
+The trait defined in this crate: the async counterpart of `plumbob::ScdcClient`, with
+the same eight operations, meaning and implementer obligations, each an `async fn`.
 It is a distinct trait: a type implementing the sync trait does not implement this one.
 Async transports implement this trait; sync transports implement `plumbob::ScdcClient`.
+
+### `SendScdcClient`
+
+`ScdcClient`'s `Send` twin: the same operations, each returning a future that is `Send`,
+with a `Send` error. Every `SendScdcClient` is an `ScdcClient` through a blanket
+implementation; a type implements one of the two. Implement it, with hdmi-hal-async's
+`SendHdmiPhy`, to spawn training on a multi-threaded executor from generic code.
 
 ### `FrlTrainer<C, P>`
 

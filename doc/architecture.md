@@ -22,7 +22,7 @@ targets (Tokio, async-std); it depends on no runtime.
 plumbob-async covers:
 
 - `ScdcClient`: the async typed SCDC interface trait, the counterpart of
-  `plumbob::ScdcClient`,
+  `plumbob::ScdcClient`, and its `Send` twin `SendScdcClient`,
 - `FrlTrainer<C, P>`: owns an async `ScdcClient` and an async `HdmiPhy` and runs
   `plumbob::lts::run` over them (`train`, `train_at_rate` and their traced forms),
 - re-exports of the shared protocol and training types from `plumbob`.
@@ -88,13 +88,24 @@ MSRV is `1.85`, which includes stable `async fn` in traits (stabilised in `1.75`
 trait is not object-safe — the same trade-offs `embedded-hal-async` and `hdmi-hal-async`
 accept.
 
-In practice: with concrete `ScdcClient` and `HdmiPhy` types whose futures are `Send`, the
-`train` future is `Send` and can be spawned on a multi-threaded Tokio runtime. A caller
-generic over `ScdcClient` and `HdmiPhy` cannot spawn it, whatever it bounds the types by;
-it runs on a single-threaded executor (Embassy, Tokio's current-thread runtime or
-`LocalSet`) or keeps the types concrete. `Send` variants of the traits, which lift this,
-are designed and proven in the stack design document ("Sync and Async Companions", "`Send` futures for multi-threaded executors") and deferred until the integration layer needs
-them.
+### `Send` futures: `SendScdcClient`
+
+With concrete `ScdcClient` and `HdmiPhy` types whose futures are `Send`, the `train`
+future is `Send` and can be spawned on a multi-threaded runtime. Code generic over the
+plain traits cannot spawn it, whatever it bounds the types by: an `async fn` in a trait
+promises nothing about its future. For that code, `SendScdcClient` is `ScdcClient`'s
+`Send` twin, as `SendHdmiPhy` (re-exported from hdmi-hal-async) is `HdmiPhy`'s: the same
+methods, each returning a future that is `Send`, a `Send` error, and `Send` as a
+supertrait, since the futures borrow the client mutably. A blanket implementation makes
+every `SendScdcClient` an `ScdcClient`, so `FrlTrainer` takes either; with both twins,
+the futures of every training method and of `exit_to_tmds` are `Send` in generic code.
+A test checks this at compile time, generic over the twins.
+
+This needs plumbob 0.3.1: earlier releases held a `Cell` across `.await`s in
+`plumbob::lts::run`, so no training future was `Send`, concrete or not. Return-type
+notation would let callers bound the plain traits' futures instead, and replace the
+twins, once it is stable; the stack design document ("Sync and Async Companions")
+records the decision.
 
 ---
 
@@ -185,7 +196,7 @@ pub use plumbob::TrainingTrace;
 ```
 src/
   lib.rs              — #![no_std], re-exports, module declarations, crate-level docs
-  client.rs           — the async ScdcClient trait
+  client.rs           — the async ScdcClient trait and its Send twin
   trainer/mod.rs      — FrlTrainer<C, P> and its TrainingIo adapter
   trainer/tests.rs    — tests of the async driver
 ```

@@ -11,12 +11,11 @@ use std::vec::Vec;
 
 use display_types::cea861::hdmi_forum::HdmiForumFrl;
 use hdmi_hal_async::LtpPattern;
-use hdmi_hal_async::phy::SendHdmiPhy;
 
 use super::*;
 use crate::{
-    CedCounters, FallbackReason, LtpReq, SendScdcClient, TrainingOutcome, TrainingWarning,
-    TxFfeRestrictions,
+    CedCounters, FallbackReason, LtpReq, SendHdmiPhy, SendScdcClient, TrainingOutcome,
+    TrainingWarning, TxFfeRestrictions,
 };
 
 const RATE: HdmiForumFrl = HdmiForumFrl::Rate6Gbps4Lanes;
@@ -633,7 +632,7 @@ type SendResults<C, P> = (
     Result<Trained, TrainingError<C, P>>,
 );
 
-/// Trains, exits and trains again with events.
+/// Trains, exits, trains again with events and, with `alloc`, traced.
 async fn train_exit_train<C: ScdcClient, P: HdmiPhy>(
     trainer: &mut FrlTrainer<C, P>,
     config: &TrainingConfig,
@@ -644,6 +643,11 @@ async fn train_exit_train<C: ScdcClient, P: HdmiPhy>(
     let with_events = trainer
         .train_with_events(&[RATE], config, &mut |_| *events += 1)
         .await;
+    #[cfg(feature = "alloc")]
+    {
+        let (_, trace) = trainer.train_traced(&[RATE], config).await;
+        *events += trace.events.len();
+    }
     (trained, exit, with_events)
 }
 

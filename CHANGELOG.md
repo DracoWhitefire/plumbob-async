@@ -71,6 +71,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`SendScdcClient`, the `Send` twin of `ScdcClient`**, for spawning training on a
+  multi-threaded executor from code generic over the client and PHY: the same methods,
+  each returning a future that is `Send`, with a `Send` error. Every `SendScdcClient` is
+  an `ScdcClient` through a blanket implementation; implement one of the two. With it
+  and hdmi-hal-async's `SendHdmiPhy` (now re-exported), the futures of every training
+  method and of `exit_to_tmds` are `Send` in generic code. Import only the trait the code
+  is bounded by: with both in scope, method calls on a twin implementation are ambiguous.
 - **The tester's TxFFE restrictions reach the PHY**, as in plumbob. The three TxFFE bits
   of `Source_Test_Configuration` (pre-shoot only, de-emphasis only, no FFE) go to
   `HdmiPhy::adjust_equalization` as `TxFfeRestrictions` (re-exported), with every

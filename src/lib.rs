@@ -5,6 +5,11 @@
 //! async `HdmiPhy`, so sync and async training are the same procedure. All shared
 //! protocol and training types are re-exported from `plumbob`.
 //!
+//! The futures of the plain traits are not required to be `Send`. To spawn training on a
+//! multi-threaded executor from code generic over the client and PHY, implement their
+//! `Send` twins, [`SendScdcClient`] and [`SendHdmiPhy`]; every twin is also an
+//! implementation of the plain trait.
+//!
 //! # Features
 //!
 //! - **`alloc`** — enables `TrainingTrace`, `FrlTrainer::train_traced` and
@@ -37,7 +42,7 @@ pub use plumbob::TrainingTrace;
 /// The FRL rate and the async PHY interface `FrlTrainer` drives, re-exported from
 /// `hdmi-hal-async` so that callers and PHY implementations use the same versions
 /// plumbob-async does without depending on that crate themselves.
-pub use hdmi_hal_async::phy::HdmiPhy;
+pub use hdmi_hal_async::phy::{HdmiPhy, SendHdmiPhy};
 pub use hdmi_hal_async::{
     EqParams, FrlOutput, HdmiForumFrl, LaneEqParams, LanePatterns, LtpPattern, TxFfeLevel,
     TxFfeRestrictions,
