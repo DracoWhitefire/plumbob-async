@@ -1,5 +1,6 @@
-use plumbob::ClearableUpdateFlags;
-use crate::{CedCounters, FrlConfig, LtpRequests, SourceTestConfig, UpdateFlags};
+use crate::{
+    CedCounters, ClearableUpdateFlags, FrlConfig, LtpRequests, SourceTestConfig, UpdateFlags,
+};
 
 /// Async typed SCDC interface required by the FRL training state machine.
 ///
