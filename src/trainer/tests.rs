@@ -11,10 +11,12 @@ use std::vec::Vec;
 
 use display_types::cea861::hdmi_forum::HdmiForumFrl;
 use hdmi_hal_async::LtpPattern;
+use hdmi_hal_async::phy::SendHdmiPhy;
 
 use super::*;
 use crate::{
-    CedCounters, FallbackReason, LtpReq, TrainingOutcome, TrainingWarning, TxFfeRestrictions,
+    CedCounters, FallbackReason, LtpReq, SendScdcClient, TrainingOutcome, TrainingWarning,
+    TxFfeRestrictions,
 };
 
 const RATE: HdmiForumFrl = HdmiForumFrl::Rate6Gbps4Lanes;
@@ -554,4 +556,132 @@ async fn the_trainer_gives_access_to_its_client_and_phy() {
     trainer.scdc_mut().read_flt_ready().await.unwrap();
     assert_eq!(trainer.phy().outputs, [FrlOutput::Active]);
     assert_eq!(trainer.scdc().flt_ready_polls, 1);
+}
+
+/// `Sink` behind the `Send` twin: each method forwards to the plain `ScdcClient`.
+struct SendSink(Sink);
+
+impl SendScdcClient for SendSink {
+    type Error = &'static str;
+
+    async fn read_flt_ready(&mut self) -> Result<bool, &'static str> {
+        ScdcClient::read_flt_ready(&mut self.0).await
+    }
+
+    async fn read_update_flags(&mut self) -> Result<UpdateFlags, &'static str> {
+        ScdcClient::read_update_flags(&mut self.0).await
+    }
+
+    async fn clear_update_flags(
+        &mut self,
+        flags: ClearableUpdateFlags,
+    ) -> Result<(), &'static str> {
+        ScdcClient::clear_update_flags(&mut self.0, flags).await
+    }
+
+    async fn read_ltp_requests(&mut self) -> Result<LtpRequests, &'static str> {
+        ScdcClient::read_ltp_requests(&mut self.0).await
+    }
+
+    async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, &'static str> {
+        ScdcClient::read_source_test_config(&mut self.0).await
+    }
+
+    async fn write_config_0_defaults(&mut self) -> Result<(), &'static str> {
+        ScdcClient::write_config_0_defaults(&mut self.0).await
+    }
+
+    async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), &'static str> {
+        ScdcClient::write_frl_config(&mut self.0, config).await
+    }
+
+    async fn read_ced(&mut self) -> Result<CedCounters, &'static str> {
+        ScdcClient::read_ced(&mut self.0).await
+    }
+}
+
+/// `Phy` behind hdmi-hal-async's `Send` twin.
+struct SendPhy(Phy);
+
+impl SendHdmiPhy for SendPhy {
+    type Error = &'static str;
+
+    async fn set_frl_rate(&mut self, rate: HdmiForumFrl) -> Result<(), &'static str> {
+        HdmiPhy::set_frl_rate(&mut self.0, rate).await
+    }
+
+    async fn send_ltp(&mut self, patterns: LanePatterns) -> Result<(), &'static str> {
+        HdmiPhy::send_ltp(&mut self.0, patterns).await
+    }
+
+    async fn set_frl_output(&mut self, output: FrlOutput) -> Result<(), &'static str> {
+        HdmiPhy::set_frl_output(&mut self.0, output).await
+    }
+
+    async fn adjust_equalization(&mut self, params: EqParams) -> Result<(), &'static str> {
+        HdmiPhy::adjust_equalization(&mut self.0, params).await
+    }
+
+    async fn set_scrambling(&mut self, enabled: bool) -> Result<(), &'static str> {
+        HdmiPhy::set_scrambling(&mut self.0, enabled).await
+    }
+}
+
+type SendResults<C, P> = (
+    Result<Trained, TrainingError<C, P>>,
+    Result<(), ExitError<C, P>>,
+    Result<Trained, TrainingError<C, P>>,
+);
+
+/// Trains, exits and trains again with events.
+async fn train_exit_train<C: ScdcClient, P: HdmiPhy>(
+    trainer: &mut FrlTrainer<C, P>,
+    config: &TrainingConfig,
+    events: &mut usize,
+) -> SendResults<C::Error, P::Error> {
+    let trained = trainer.train(&[RATE], config).await;
+    let exit = trainer.exit_to_tmds().await;
+    let with_events = trainer
+        .train_with_events(&[RATE], config, &mut |_| *events += 1)
+        .await;
+    (trained, exit, with_events)
+}
+
+/// [`train_exit_train`] generic over the `Send` twins, as a future that must be `Send`:
+/// this compiles only if every training future is `Send` in generic code, so it could be
+/// spawned on a multi-threaded executor.
+fn spawnable<'a, C: SendScdcClient, P: SendHdmiPhy>(
+    trainer: &'a mut FrlTrainer<C, P>,
+    config: &'a TrainingConfig,
+    events: &'a mut usize,
+) -> impl Future<Output = SendResults<C::Error, P::Error>> + Send + 'a {
+    train_exit_train(trainer, config, events)
+}
+
+#[pollster::test]
+async fn the_send_twins_train_in_generic_send_code() {
+    let sink = Sink {
+        waits: true,
+        ..Sink::training(&[per_lane(), all(LtpReq::None)])
+    };
+    let mut trainer = FrlTrainer::new(SendSink(sink), SendPhy(Phy::default()));
+    let mut config = TrainingConfig::default();
+    // The second attempt finds no more requests; keep its timeout short.
+    config.ltp_polls = 10;
+    let mut events = 0;
+    let (trained, exit, with_events) = spawnable(&mut trainer, &config, &mut events).await;
+    assert!(matches!(
+        trained.map(|trained| trained.outcome),
+        Ok(TrainingOutcome::Success {
+            achieved_rate: RATE,
+            ..
+        })
+    ));
+    assert_eq!(exit, Ok(()));
+    assert!(with_events.is_ok());
+    assert!(events > 0);
+    // The operations training does not use, through the blanket implementations.
+    let (mut sink, mut phy) = trainer.into_parts();
+    assert!(ScdcClient::read_ced(&mut sink).await.is_ok());
+    assert_eq!(HdmiPhy::set_scrambling(&mut phy, true).await, Ok(()));
 }
