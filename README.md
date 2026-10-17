@@ -18,9 +18,8 @@ plumbob's. All shared protocol and training types are re-exported from `plumbob`
 
 ## Usage
 
-```toml
-[dependencies]
-plumbob-async = "0.1"
+```sh
+cargo add plumbob-async
 ```
 
 Implement `ScdcClient` against your async SCDC transport, one method per register
@@ -157,15 +156,15 @@ No features are enabled by default.
 training without an allocator. The `alloc` feature adds `TrainingTrace`, `train_traced`
 and `train_at_rate_traced`; `std` implies `alloc`.
 
-```toml
+```sh
 # no_std, no heap
-plumbob-async = { version = "0.1" }
+cargo add plumbob-async
 
 # no_std + trace support
-plumbob-async = { version = "0.1", features = ["alloc"] }
+cargo add plumbob-async --features alloc
 
 # std targets
-plumbob-async = { version = "0.1", features = ["std"] }
+cargo add plumbob-async --features std
 ```
 
 No executor is assumed. The traits impose no constraint on which async runtime is used —
