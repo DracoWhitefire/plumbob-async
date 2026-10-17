@@ -22,7 +22,7 @@ extern crate alloc;
 mod client;
 mod trainer;
 
-pub use client::ScdcClient;
+pub use client::{ScdcClient, SendScdcClient};
 pub use trainer::FrlTrainer;
 
 pub use plumbob::{

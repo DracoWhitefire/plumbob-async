@@ -58,3 +58,105 @@ pub trait ScdcClient {
     /// Async counterpart to [`plumbob::ScdcClient::read_ced`].
     async fn read_ced(&mut self) -> Result<CedCounters, Self::Error>;
 }
+
+/// [`ScdcClient`] with `Send` futures, for code that spawns link training on a
+/// multi-threaded executor.
+///
+/// `ScdcClient`'s `async fn`s promise nothing about their futures, so code generic over
+/// `C: ScdcClient` cannot spawn a future that calls them, however `C` is bounded. This
+/// trait has the same methods and contract, each returning a future that is `Send`, and
+/// errors that are `Send` too: a spawned task returns them. Implementations still write
+/// `async fn`; the compiler checks that each future is `Send`. With a `SendScdcClient` and
+/// an `hdmi_hal_async::phy::SendHdmiPhy`, the futures of `FrlTrainer`'s training methods
+/// and `exit_to_tmds` are `Send` in generic code too.
+///
+/// Every `SendScdcClient` is an `ScdcClient`, through a blanket implementation, so it
+/// works with everything written against `ScdcClient` as well; a type implements one of
+/// the two (implementing both conflicts with the blanket implementation). A
+/// `SendScdcClient` type has both traits' methods, so with both traits in scope a method
+/// call on it is ambiguous: import only the trait the code is bounded by, or call
+/// `SendScdcClient::read_flt_ready(…)`.
+pub trait SendScdcClient: Send {
+    /// Error type returned by SCDC operations.
+    type Error: Send;
+
+    /// See [`ScdcClient::read_flt_ready`].
+    fn read_flt_ready(&mut self) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+
+    /// See [`ScdcClient::read_update_flags`].
+    fn read_update_flags(
+        &mut self,
+    ) -> impl Future<Output = Result<UpdateFlags, Self::Error>> + Send;
+
+    /// See [`ScdcClient::clear_update_flags`].
+    fn clear_update_flags(
+        &mut self,
+        flags: ClearableUpdateFlags,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// See [`ScdcClient::read_ltp_requests`].
+    fn read_ltp_requests(
+        &mut self,
+    ) -> impl Future<Output = Result<LtpRequests, Self::Error>> + Send;
+
+    /// See [`ScdcClient::read_source_test_config`].
+    fn read_source_test_config(
+        &mut self,
+    ) -> impl Future<Output = Result<SourceTestConfig, Self::Error>> + Send;
+
+    /// See [`ScdcClient::write_config_0_defaults`].
+    fn write_config_0_defaults(&mut self) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// See [`ScdcClient::write_frl_config`].
+    fn write_frl_config(
+        &mut self,
+        config: FrlConfig,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// See [`ScdcClient::read_ced`].
+    fn read_ced(&mut self) -> impl Future<Output = Result<CedCounters, Self::Error>> + Send;
+}
+
+impl<T: SendScdcClient> ScdcClient for T {
+    type Error = <T as SendScdcClient>::Error;
+
+    fn read_flt_ready(&mut self) -> impl Future<Output = Result<bool, Self::Error>> {
+        <T as SendScdcClient>::read_flt_ready(self)
+    }
+
+    fn read_update_flags(&mut self) -> impl Future<Output = Result<UpdateFlags, Self::Error>> {
+        <T as SendScdcClient>::read_update_flags(self)
+    }
+
+    fn clear_update_flags(
+        &mut self,
+        flags: ClearableUpdateFlags,
+    ) -> impl Future<Output = Result<(), Self::Error>> {
+        <T as SendScdcClient>::clear_update_flags(self, flags)
+    }
+
+    fn read_ltp_requests(&mut self) -> impl Future<Output = Result<LtpRequests, Self::Error>> {
+        <T as SendScdcClient>::read_ltp_requests(self)
+    }
+
+    fn read_source_test_config(
+        &mut self,
+    ) -> impl Future<Output = Result<SourceTestConfig, Self::Error>> {
+        <T as SendScdcClient>::read_source_test_config(self)
+    }
+
+    fn write_config_0_defaults(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
+        <T as SendScdcClient>::write_config_0_defaults(self)
+    }
+
+    fn write_frl_config(
+        &mut self,
+        config: FrlConfig,
+    ) -> impl Future<Output = Result<(), Self::Error>> {
+        <T as SendScdcClient>::write_frl_config(self, config)
+    }
+
+    fn read_ced(&mut self) -> impl Future<Output = Result<CedCounters, Self::Error>> {
+        <T as SendScdcClient>::read_ced(self)
+    }
+}
