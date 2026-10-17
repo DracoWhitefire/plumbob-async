@@ -1,703 +1,691 @@
+//! Tests of the async driver. The state machine itself is tested in plumbob; these check
+//! that `FrlTrainer` runs it over async I/O, including I/O that actually waits.
+
 extern crate std;
 
-use crate::client::ScdcClient;
-use crate::{LtpReq, TrainingConfig, TrainingError, TrainingOutcome};
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll};
+use std::collections::VecDeque;
+use std::vec::Vec;
+
+use display_types::cea861::hdmi_forum::HdmiForumFrl;
+use hdmi_hal_async::LtpPattern;
+
+use super::*;
+use crate::{
+    CedCounters, FallbackReason, LtpReq, SendHdmiPhy, SendScdcClient, TrainingOutcome,
+    TrainingWarning, TxFfeRestrictions,
+};
+
+const RATE: HdmiForumFrl = HdmiForumFrl::Rate6Gbps4Lanes;
+
+/// A future that is `Pending` once (and wakes itself) before completing.
+struct WaitOnce(bool);
+
+impl Future for WaitOnce {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 {
+            Poll::Ready(())
+        } else {
+            self.0 = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+}
+
+/// Waits once when `waits` is set, then fails if `name` is the operation set to fail.
+async fn operation(
+    waits: bool,
+    fail: Option<&'static str>,
+    name: &'static str,
+) -> Result<(), &'static str> {
+    if waits {
+        WaitOnce(false).await;
+    }
+    if fail == Some(name) {
+        Err(name)
+    } else {
+        Ok(())
+    }
+}
+
+fn all(req: LtpReq) -> LtpRequests {
+    LtpRequests::new(req, req, req, req)
+}
+
+/// A scripted sink: `FLT_ready` after `flt_ready_after` polls, then each set of requests
+/// posted with `FLT_update` in turn once `Config_1` holds a rate, then `FRL_start`. A
+/// `source_test_change` is applied, with `Source_Test_Update`, on the first poll after that.
+#[derive(Default)]
+struct Sink {
+    flt_ready_after: Option<u32>,
+    flt_ready_polls: u32,
+    rounds: VecDeque<LtpRequests>,
+    frl_start: bool,
+    configured: bool,
+    flags: UpdateFlags,
+    source_test: SourceTestConfig,
+    source_test_change: Option<SourceTestConfig>,
+    waits: bool,
+    fail: Option<&'static str>,
+}
+
+impl Sink {
+    /// A sink that raises `Source_Test_Update` before training.
+    fn with_source_test(self) -> Self {
+        let mut flags = UpdateFlags::default();
+        flags.source_test_update = true;
+        Self { flags, ..self }
+    }
+
+    fn training(rounds: &[LtpRequests]) -> Self {
+        Self {
+            flt_ready_after: Some(1),
+            rounds: rounds.iter().copied().collect(),
+            frl_start: true,
+            ..Self::default()
+        }
+    }
+}
+
+impl ScdcClient for Sink {
+    type Error = &'static str;
+
+    async fn read_flt_ready(&mut self) -> Result<bool, &'static str> {
+        operation(self.waits, self.fail, "read_flt_ready").await?;
+        let ready = self
+            .flt_ready_after
+            .is_some_and(|n| self.flt_ready_polls >= n);
+        self.flt_ready_polls += 1;
+        Ok(ready)
+    }
+
+    async fn read_update_flags(&mut self) -> Result<UpdateFlags, &'static str> {
+        operation(self.waits, self.fail, "read_update_flags").await?;
+        if self.configured {
+            if let Some(config) = self.source_test_change.take() {
+                self.source_test = config;
+                self.flags.source_test_update = true;
+            }
+            if self.rounds.is_empty() {
+                self.flags.frl_start |= self.frl_start;
+            } else {
+                self.flags.flt_update = true;
+            }
+        }
+        Ok(self.flags)
+    }
+
+    async fn clear_update_flags(
+        &mut self,
+        flags: ClearableUpdateFlags,
+    ) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "clear_update_flags").await?;
+        if flags.flt_update && self.flags.flt_update {
+            self.flags.flt_update = false;
+            self.rounds.pop_front();
+        }
+        self.flags.source_test_update &= !flags.source_test_update;
+        if flags.frl_start && self.flags.frl_start {
+            self.flags.frl_start = false;
+            self.frl_start = false;
+        }
+        Ok(())
+    }
+
+    async fn read_ltp_requests(&mut self) -> Result<LtpRequests, &'static str> {
+        operation(self.waits, self.fail, "read_ltp_requests").await?;
+        Ok(self.rounds.front().copied().unwrap_or(all(LtpReq::None)))
+    }
+
+    async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, &'static str> {
+        operation(self.waits, self.fail, "read_source_test_config").await?;
+        Ok(self.source_test)
+    }
+
+    async fn write_config_0_defaults(&mut self) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "write_config_0_defaults").await
+    }
+
+    async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "write_frl_config").await?;
+        self.configured = config.frl_rate != HdmiForumFrl::NotSupported;
+        Ok(())
+    }
+
+    async fn read_ced(&mut self) -> Result<CedCounters, &'static str> {
+        operation(self.waits, self.fail, "read_ced").await?;
+        Ok(CedCounters::new(None, None, None, None))
+    }
+}
+
+/// A PHY that records the rates and patterns it is given.
+#[derive(Default)]
+struct Phy {
+    rates: Vec<HdmiForumFrl>,
+    patterns: Vec<LanePatterns>,
+    outputs: Vec<FrlOutput>,
+    equalization: Vec<EqParams>,
+    waits: bool,
+    fail: Option<&'static str>,
+}
+
+impl HdmiPhy for Phy {
+    type Error = &'static str;
+
+    async fn set_frl_rate(&mut self, rate: HdmiForumFrl) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "set_frl_rate").await?;
+        self.rates.push(rate);
+        Ok(())
+    }
+
+    async fn send_ltp(&mut self, patterns: LanePatterns) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "send_ltp").await?;
+        self.patterns.push(patterns);
+        Ok(())
+    }
+
+    async fn set_frl_output(&mut self, output: FrlOutput) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "set_frl_output").await?;
+        self.outputs.push(output);
+        Ok(())
+    }
+
+    async fn adjust_equalization(&mut self, params: EqParams) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "adjust_equalization").await?;
+        self.equalization.push(params);
+        Ok(())
+    }
+
+    async fn set_scrambling(&mut self, _enabled: bool) -> Result<(), &'static str> {
+        operation(self.waits, self.fail, "set_scrambling").await
+    }
+}
+
+fn per_lane() -> LtpRequests {
+    LtpRequests::new(LtpReq::Lfsr0, LtpReq::Lfsr1, LtpReq::Lfsr2, LtpReq::Lfsr3)
+}
+
+#[pollster::test]
+async fn trains_through_async_io() {
+    let sink = Sink::training(&[per_lane(), all(LtpReq::FfeChange), all(LtpReq::None)]);
+    let mut trainer = FrlTrainer::new(sink, Phy::default());
+    let outcome = trainer.train(&[RATE], &TrainingConfig::default()).await;
+    assert!(matches!(
+        outcome.map(|trained| trained.outcome),
+        Ok(TrainingOutcome::Success {
+            achieved_rate: RATE,
+            ..
+        })
+    ));
+    let (_, phy) = trainer.into_parts();
+    assert_eq!(phy.rates, [RATE]);
+    assert!(phy.patterns.contains(&LanePatterns {
+        lane0: Some(LtpPattern::Lfsr0),
+        lane1: Some(LtpPattern::Lfsr1),
+        lane2: Some(LtpPattern::Lfsr2),
+        lane3: Some(LtpPattern::Lfsr3),
+    }));
+    // Gap characters in LTS:2 and again in LTS:P.
+    assert_eq!(phy.outputs, [FrlOutput::GapOnly, FrlOutput::GapOnly]);
+    // LTS:2 resets every lane to level 0; the 0xE request raises every lane to 1.
+    let levels = |eq: &EqParams| {
+        (
+            [
+                eq.lane0.tx_ffe_level.value(),
+                eq.lane1.tx_ffe_level.value(),
+                eq.lane2.tx_ffe_level.value(),
+            ],
+            eq.lane3.map(|lane| lane.tx_ffe_level.value()),
+        )
+    };
+    let sent: Vec<_> = phy.equalization.iter().map(levels).collect();
+    assert_eq!(sent, [([0, 0, 0], Some(0)), ([1, 1, 1], Some(1))]);
+}
 
 #[cfg(feature = "alloc")]
-use crate::FfeLevels;
-
-use super::FrlTrainer;
-use super::sim::{MockPhy, RATE, SimScdc, cfg, flt_ready, frl_started, ltp, not_ready};
-
-// -------------------------------------------------------------------------
-// State machine: normal paths
-// -------------------------------------------------------------------------
+#[pollster::test]
+async fn io_that_waits_gives_the_same_result() {
+    let rounds = [per_lane(), all(LtpReq::None)];
+    let mut sync_like = FrlTrainer::new(Sink::training(&rounds), Phy::default());
+    let mut waiting = FrlTrainer::new(
+        Sink {
+            waits: true,
+            ..Sink::training(&rounds)
+        },
+        Phy {
+            waits: true,
+            ..Phy::default()
+        },
+    );
+    let config = TrainingConfig::default();
+    let expected = sync_like.train_traced(&[RATE], &config).await;
+    let actual = waiting.train_traced(&[RATE], &config).await;
+    assert!(expected.0.is_ok());
+    assert_eq!(actual, expected);
+}
 
 #[pollster::test]
-async fn successful_training() {
-    let mut scdc = SimScdc::new();
-    // Phase 2: 2 not-ready, then flt_ready (after_iterations = 2)
-    scdc.push(not_ready());
-    scdc.push(not_ready());
-    scdc.push(flt_ready());
-    // Phase 3: 1 not-started, then frl_start (after_iterations = 1)
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    // Phase 4: two pattern requests then success
-    scdc.push(ltp(LtpReq::Lfsr0));
-    scdc.push(ltp(LtpReq::Lfsr2));
-    scdc.push(frl_started()); // ltp_req = None → success
-
-    let outcome = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap();
+async fn a_source_test_update_during_training_reaches_the_phy() {
+    let mut no_ffe = SourceTestConfig::default();
+    no_ffe.txffe_no_ffe = true;
+    let sink = Sink {
+        source_test_change: Some(no_ffe),
+        ..Sink::training(&[per_lane(), all(LtpReq::None)])
+    };
+    let mut trainer = FrlTrainer::new(sink, Phy::default());
+    let mut reads = Vec::new();
+    let outcome = trainer
+        .train_with_events(&[RATE], &TrainingConfig::default(), &mut |event| {
+            if let TrainingEvent::SourceTestConfigRead { config, .. } = event {
+                reads.push(config);
+            }
+        })
+        .await;
+    assert!(matches!(
+        outcome.map(|trained| trained.outcome),
+        Ok(TrainingOutcome::Success {
+            achieved_rate: RATE,
+            ..
+        })
+    ));
+    assert_eq!(reads, [SourceTestConfig::default(), no_ffe]);
+    let (sink, phy) = trainer.into_parts();
+    assert!(!sink.flags.source_test_update);
+    // The equalization of LTS:2's rate setup, then the re-send with the new restrictions.
+    let restrictions: Vec<TxFfeRestrictions> = phy
+        .equalization
+        .iter()
+        .map(|eq| eq.tx_ffe_restrictions)
+        .collect();
     assert_eq!(
-        outcome,
-        TrainingOutcome::Success {
-            achieved_rate: RATE
-        }
+        restrictions,
+        [
+            TxFfeRestrictions::default(),
+            TxFfeRestrictions::new(false, false, true)
+        ]
     );
 }
 
 #[pollster::test]
-async fn flt_ready_timeout() {
-    let mut scdc = SimScdc::new();
-    scdc.push(not_ready());
-    scdc.push(not_ready());
-    scdc.push(not_ready()); // i reaches flt_ready_timeout = 3
+async fn a_fallback_returns_the_phy_to_tmds() {
+    let mut trainer = FrlTrainer::new(Sink::default(), Phy::default());
+    let mut config = TrainingConfig::default();
+    config.flt_ready_polls = 3;
+    let outcome = trainer.train_at_rate(RATE, &config).await;
+    assert!(matches!(
+        outcome.map(|trained| trained.outcome),
+        Ok(TrainingOutcome::FallbackRequired {
+            reason: FallbackReason::FltReadyTimeout,
+            ..
+        })
+    ));
 
-    let outcome = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &cfg(3, 10, 10))
-        .await
-        .unwrap();
-    assert_eq!(outcome, TrainingOutcome::FallbackRequired);
+    let (_, phy) = trainer.into_parts();
+    assert_eq!(phy.rates.last(), Some(&HdmiForumFrl::NotSupported));
 }
 
 #[pollster::test]
-async fn flt_ready_immediate() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready()); // asserts on first read: i = 0
-    scdc.push(frl_started());
-    scdc.push(frl_started()); // phase 4: ltp_req = None
-
-    let outcome = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap();
-    assert_eq!(
-        outcome,
-        TrainingOutcome::Success {
-            achieved_rate: RATE
-        }
-    );
-}
-
-#[pollster::test]
-async fn frl_start_timeout() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready()); // phase 2: immediate
-    // Phase 3: i reaches frl_start_timeout = 3
-    scdc.push(flt_ready());
-    scdc.push(flt_ready());
-    scdc.push(flt_ready());
-
-    let outcome = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &cfg(10, 3, 10))
-        .await
-        .unwrap();
-    assert_eq!(outcome, TrainingOutcome::FallbackRequired);
-}
-
-#[pollster::test]
-async fn frl_start_immediate() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready()); // phase 2: immediate (i = 0)
-    scdc.push(frl_started()); // phase 3: immediate (i = 0)
-    scdc.push(frl_started()); // phase 4: ltp_req = None
-
-    let outcome = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap();
-    assert_eq!(
-        outcome,
-        TrainingOutcome::Success {
-            achieved_rate: RATE
-        }
-    );
-}
-
-#[pollster::test]
-async fn ltp_loop_timeout() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    // Phase 4: i reaches ltp_timeout = 3
-    scdc.push(ltp(LtpReq::Lfsr1));
-    scdc.push(ltp(LtpReq::Lfsr1));
-    scdc.push(ltp(LtpReq::Lfsr1));
-
-    let outcome = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &cfg(10, 10, 3))
-        .await
-        .unwrap();
-    assert_eq!(outcome, TrainingOutcome::FallbackRequired);
-}
-
-#[pollster::test]
-async fn ltp_success_on_first_read() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    scdc.push(frl_started()); // ltp_req = None on the first LTP read
-
-    let outcome = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap();
-    assert_eq!(
-        outcome,
-        TrainingOutcome::Success {
-            achieved_rate: RATE
-        }
-    );
-}
-
-#[pollster::test]
-async fn ltp_all_lfsr_variants() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    scdc.push(ltp(LtpReq::Lfsr0));
-    scdc.push(ltp(LtpReq::Lfsr1));
-    scdc.push(ltp(LtpReq::Lfsr2));
-    scdc.push(ltp(LtpReq::Lfsr3));
-    scdc.push(frl_started()); // ltp_req = None
-
-    let outcome = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap();
-    assert_eq!(
-        outcome,
-        TrainingOutcome::Success {
-            achieved_rate: RATE
-        }
-    );
-}
-
-// -------------------------------------------------------------------------
-// Error propagation
-// -------------------------------------------------------------------------
-
-#[pollster::test]
-async fn error_write_frl_config() {
-    let mut scdc = SimScdc::new();
-    scdc.fail_write_frl_config = true;
-
-    let err = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap_err();
-    assert_eq!(err, TrainingError::Scdc(()));
-}
-
-#[pollster::test]
-async fn error_set_frl_rate() {
-    let mut phy = MockPhy::new();
-    phy.fail_set_frl_rate = true;
-
-    let err = FrlTrainer::new(SimScdc::new(), phy)
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap_err();
-    assert_eq!(err, TrainingError::Phy(()));
-}
-
-#[pollster::test]
-async fn error_read_training_status_phase2() {
-    let mut scdc = SimScdc::new();
-    scdc.push_err();
-
-    let err = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap_err();
-    assert_eq!(err, TrainingError::Scdc(()));
-}
-
-#[pollster::test]
-async fn error_read_training_status_phase3() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push_err();
-
-    let err = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap_err();
-    assert_eq!(err, TrainingError::Scdc(()));
-}
-
-#[pollster::test]
-async fn error_read_training_status_phase4() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    scdc.push_err();
-
-    let err = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap_err();
-    assert_eq!(err, TrainingError::Scdc(()));
-}
-
-#[pollster::test]
-async fn error_read_ced() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    scdc.push(ltp(LtpReq::Lfsr0)); // non-None → read_ced is called
-    scdc.fail_read_ced = true;
-
-    let err = FrlTrainer::new(scdc, MockPhy::new())
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap_err();
-    assert_eq!(err, TrainingError::Scdc(()));
-}
-
-#[pollster::test]
-async fn error_send_ltp() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    scdc.push(ltp(LtpReq::Lfsr0)); // non-None → send_ltp is called
-    let mut phy = MockPhy::new();
-    phy.fail_send_ltp = true;
-
-    let err = FrlTrainer::new(scdc, phy)
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap_err();
-    assert_eq!(err, TrainingError::Phy(()));
-}
-
-#[pollster::test]
-async fn send_ltp_correct_pattern_per_ltp_req() {
-    // Verify the From<LtpReq> → LtpPattern mapping: each LFSR variant
-    // must produce the corresponding raw pattern index (1–4).
-    let cases: &[(LtpReq, u8)] = &[
-        (LtpReq::Lfsr0, 1),
-        (LtpReq::Lfsr1, 2),
-        (LtpReq::Lfsr2, 3),
-        (LtpReq::Lfsr3, 4),
-    ];
-    for &(req, expected_raw) in cases {
-        let mut scdc = SimScdc::new();
-        scdc.push(flt_ready());
-        scdc.push(frl_started());
-        scdc.push(ltp(req)); // sink requests this pattern
-        scdc.push(frl_started()); // ltp_req = None → success
-
-        let mut trainer = FrlTrainer::new(scdc, MockPhy::new());
-        trainer
-            .train_at_rate(RATE, &TrainingConfig::default())
-            .await
-            .unwrap();
-        let (_, phy) = trainer.into_parts();
-
-        assert_eq!(
-            phy.last_ltp.unwrap().value(),
-            expected_raw,
-            "LtpReq variant produced wrong LtpPattern raw value"
+async fn scdc_and_phy_errors_are_returned() {
+    let rounds = [per_lane(), all(LtpReq::None)];
+    for op in [
+        "read_flt_ready",
+        "read_update_flags",
+        "clear_update_flags",
+        "read_ltp_requests",
+        "read_source_test_config",
+        "write_config_0_defaults",
+        "write_frl_config",
+    ] {
+        let sink = Sink {
+            fail: Some(op),
+            ..Sink::training(&rounds).with_source_test()
+        };
+        let outcome = FrlTrainer::new(sink, Phy::default())
+            .train(&[RATE], &TrainingConfig::default())
+            .await;
+        assert!(
+            matches!(outcome, Err(TrainingError::Scdc { error, .. }) if error == op),
+            "{op}"
+        );
+    }
+    for op in [
+        "set_frl_rate",
+        "send_ltp",
+        "set_frl_output",
+        "adjust_equalization",
+    ] {
+        let phy = Phy {
+            fail: Some(op),
+            ..Phy::default()
+        };
+        let outcome = FrlTrainer::new(Sink::training(&rounds), phy)
+            .train(&[RATE], &TrainingConfig::default())
+            .await;
+        assert!(
+            matches!(outcome, Err(TrainingError::Phy { error, .. }) if error == op),
+            "{op}"
         );
     }
 }
-
-// -------------------------------------------------------------------------
-// into_parts
-// -------------------------------------------------------------------------
-
-#[pollster::test]
-async fn into_parts_recovers_scdc_and_phy() {
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    scdc.push(frl_started()); // phase 4: ltp_req = None
-
-    let mut trainer = FrlTrainer::new(scdc, MockPhy::new());
-    trainer
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap();
-
-    let (scdc, phy) = trainer.into_parts();
-    assert_eq!(scdc.written_config.unwrap().rate, RATE);
-    assert_eq!(phy.frl_rate, Some(RATE));
-}
-
-// -------------------------------------------------------------------------
-// SimScdc and MockPhy behaviour
-// -------------------------------------------------------------------------
-
-#[pollster::test]
-async fn sim_scdc_empty_queue_returns_err() {
-    // No statuses pushed — the exhausted-queue fallback must return Err(()).
-    let mut scdc = SimScdc::new();
-    assert_eq!(scdc.read_training_status().await, Err(()));
-}
-
-#[pollster::test]
-async fn sim_scdc_statuses_consumed_fifo() {
-    let mut scdc = SimScdc::new();
-    scdc.push(not_ready());
-    scdc.push(flt_ready());
-    assert_eq!(scdc.read_training_status().await, Ok(not_ready()));
-    assert_eq!(scdc.read_training_status().await, Ok(flt_ready()));
-    assert_eq!(scdc.read_training_status().await, Err(())); // queue now empty
-}
-
-#[pollster::test]
-async fn sim_scdc_ced_calls_counted() {
-    // Two LTP iterations → read_ced called exactly twice.
-    let mut scdc = SimScdc::new();
-    scdc.push(flt_ready());
-    scdc.push(frl_started());
-    scdc.push(ltp(LtpReq::Lfsr0));
-    scdc.push(ltp(LtpReq::Lfsr1));
-    scdc.push(frl_started()); // ltp_req = None → success
-
-    let mut trainer = FrlTrainer::new(scdc, MockPhy::new());
-    trainer
-        .train_at_rate(RATE, &TrainingConfig::default())
-        .await
-        .unwrap();
-    let (scdc, _) = trainer.into_parts();
-    assert_eq!(scdc.ced_calls, 2);
-}
-
-#[pollster::test]
-async fn sim_scdc_read_ced_returns_all_none() {
-    let mut scdc = SimScdc::new();
-    let ced = scdc.read_ced().await.unwrap();
-    assert!(ced.lane0.is_none());
-    assert!(ced.lane1.is_none());
-    assert!(ced.lane2.is_none());
-    assert!(ced.lane3.is_none());
-}
-
-#[pollster::test]
-async fn mock_phy_adjust_equalization_always_succeeds() {
-    use hdmi_hal_async::{EqParams, phy::HdmiPhy};
-    let mut phy = MockPhy::new();
-    assert!(phy.adjust_equalization(EqParams::new()).await.is_ok());
-}
-
-#[pollster::test]
-async fn mock_phy_set_scrambling_always_succeeds() {
-    use hdmi_hal_async::phy::HdmiPhy;
-    let mut phy = MockPhy::new();
-    assert!(phy.set_scrambling(true).await.is_ok());
-    assert!(phy.set_scrambling(false).await.is_ok());
-}
-
-// -------------------------------------------------------------------------
-// Diagnostics: TrainingTrace event sequences
-// -------------------------------------------------------------------------
 
 #[cfg(feature = "alloc")]
-mod trace_tests {
-    extern crate std;
-    use std::vec::Vec;
+#[pollster::test]
+async fn traced_training_records_the_attempt() {
+    let config = TrainingConfig::default();
+    let mut trainer = FrlTrainer::new(Sink::training(&[all(LtpReq::None)]), Phy::default());
+    let (outcome, trace) = trainer.train_at_rate_traced(RATE, &config).await;
+    assert!(matches!(
+        outcome.map(|trained| trained.outcome),
+        Ok(TrainingOutcome::Success {
+            achieved_rate: RATE,
+            ..
+        })
+    ));
+    assert_eq!(trace.rates, [RATE]);
+    assert_eq!(trace.config, config);
+    assert!(matches!(
+        trace.events[..2],
+        [
+            TrainingEvent::SourceTestConfigRead { config, .. },
+            TrainingEvent::FltReady { after_polls: 2, .. },
+        ] if config == SourceTestConfig::default()
+    ));
+    assert!(matches!(
+        trace.events.last(),
+        Some(TrainingEvent::FrlStart { .. })
+    ));
+}
 
-    use crate::TrainingEvent;
+#[pollster::test]
+async fn the_test_doubles_answer_the_operations_training_does_not_use() {
+    // Covers the trait methods the state machine never calls.
+    let mut sink = Sink::default();
+    assert!(sink.read_ced().await.is_ok());
+    assert!(sink.read_source_test_config().await.is_ok());
+    let mut sink = Sink {
+        fail: Some("read_ced"),
+        ..Sink::default()
+    };
+    assert_eq!(sink.read_ced().await, Err("read_ced"));
+    assert!(Phy::default().set_scrambling(true).await.is_ok());
+}
 
-    use super::super::sim::{MockPhy, RATE, SimScdc, cfg, flt_ready, frl_started, ltp, not_ready};
-    use super::*;
+#[pollster::test]
+async fn exit_to_tmds_performs_lts_l_over_async_io() {
+    let sink = Sink {
+        configured: true,
+        waits: true,
+        ..Sink::default()
+    };
+    let phy = Phy {
+        waits: true,
+        ..Phy::default()
+    };
+    let mut trainer = FrlTrainer::new(sink, phy);
+    assert_eq!(trainer.exit_to_tmds().await, Ok(()));
+    let (sink, phy) = trainer.into_parts();
+    assert!(!sink.configured);
+    assert_eq!(phy.rates, [HdmiForumFrl::NotSupported]);
+    assert_eq!(phy.patterns, [LanePatterns::default()]);
+}
 
-    #[pollster::test]
-    async fn trace_successful_run() {
-        let mut scdc = SimScdc::new();
-        scdc.push(not_ready());
-        scdc.push(not_ready());
-        scdc.push(flt_ready()); // after_iterations = 2
-        scdc.push(flt_ready());
-        scdc.push(frl_started()); // after_iterations = 1
-        scdc.push(ltp(LtpReq::Lfsr0));
-        scdc.push(ltp(LtpReq::Lfsr2));
-        scdc.push(frl_started()); // ltp_req = None
+#[pollster::test]
+async fn exit_to_tmds_reports_each_ends_error() {
+    let sink = Sink {
+        fail: Some("write_frl_config"),
+        ..Sink::default()
+    };
+    let mut trainer = FrlTrainer::new(sink, Phy::default());
+    let result = trainer.exit_to_tmds().await;
+    assert!(
+        matches!(
+            result,
+            Err(ExitError {
+                scdc: Some("write_frl_config"),
+                phy: None,
+                ..
+            })
+        ),
+        "{result:?}"
+    );
+}
 
-        let (outcome, trace) = FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .unwrap();
-
-        assert_eq!(
-            outcome,
-            TrainingOutcome::Success {
-                achieved_rate: RATE
-            }
-        );
-        assert_eq!(trace.rate, RATE);
-        assert_eq!(
-            trace.events,
-            [
-                TrainingEvent::RateConfigured {
-                    rate: RATE,
-                    ffe_levels: FfeLevels::Ffe0
-                },
-                TrainingEvent::FltReadyReceived {
-                    after_iterations: 2
-                },
-                TrainingEvent::FrlStartReceived {
-                    after_iterations: 1
-                },
-                TrainingEvent::LtpPatternRequested {
-                    pattern: LtpReq::Lfsr0
-                },
-                TrainingEvent::LtpPatternRequested {
-                    pattern: LtpReq::Lfsr2
-                },
-                TrainingEvent::AllLanesSatisfied {
-                    after_iterations: 2
-                },
-            ]
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_phase2_timeout() {
-        let mut scdc = SimScdc::new();
-        scdc.push(not_ready());
-        scdc.push(not_ready());
-        scdc.push(not_ready()); // i reaches flt_ready_timeout = 3
-
-        let (_outcome, trace) = FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &cfg(3, 10, 10))
-            .await
-            .unwrap();
-
-        assert_eq!(
-            trace.events,
-            [
-                TrainingEvent::RateConfigured {
-                    rate: RATE,
-                    ffe_levels: FfeLevels::Ffe0
-                },
-                TrainingEvent::FltReadyTimeout {
-                    iterations_elapsed: 3
-                },
-            ]
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_phase3_timeout() {
-        let mut scdc = SimScdc::new();
-        scdc.push(flt_ready()); // phase 2: immediate (after_iterations = 0)
-        scdc.push(flt_ready()); // frl_start = false
-        scdc.push(flt_ready());
-        scdc.push(flt_ready()); // i reaches frl_start_timeout = 3
-
-        let (_outcome, trace) = FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &cfg(10, 3, 10))
-            .await
-            .unwrap();
-
-        assert_eq!(
-            trace.events,
-            [
-                TrainingEvent::RateConfigured {
-                    rate: RATE,
-                    ffe_levels: FfeLevels::Ffe0
-                },
-                TrainingEvent::FltReadyReceived {
-                    after_iterations: 0
-                },
-                TrainingEvent::FrlStartTimeout {
-                    iterations_elapsed: 3
-                },
-            ]
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_phase4_timeout() {
-        let mut scdc = SimScdc::new();
-        scdc.push(flt_ready());
-        scdc.push(frl_started());
-        scdc.push(ltp(LtpReq::Lfsr1)); // i = 1, new pattern
-        scdc.push(ltp(LtpReq::Lfsr3)); // i = 2, new pattern
-        scdc.push(ltp(LtpReq::Lfsr3)); // i = 3, same — no new event → timeout
-
-        let (_outcome, trace) = FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &cfg(10, 10, 3))
-            .await
-            .unwrap();
-
-        assert_eq!(
-            trace.events,
-            [
-                TrainingEvent::RateConfigured {
-                    rate: RATE,
-                    ffe_levels: FfeLevels::Ffe0
-                },
-                TrainingEvent::FltReadyReceived {
-                    after_iterations: 0
-                },
-                TrainingEvent::FrlStartReceived {
-                    after_iterations: 0
-                },
-                TrainingEvent::LtpPatternRequested {
-                    pattern: LtpReq::Lfsr1
-                },
-                TrainingEvent::LtpPatternRequested {
-                    pattern: LtpReq::Lfsr3
-                },
-                TrainingEvent::LtpLoopTimeout {
-                    iterations_elapsed: 3
-                },
-            ]
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_ltp_pattern_on_transition_only() {
-        let mut scdc = SimScdc::new();
-        scdc.push(flt_ready());
-        scdc.push(frl_started());
-        scdc.push(ltp(LtpReq::Lfsr1));
-        scdc.push(ltp(LtpReq::Lfsr1));
-        scdc.push(ltp(LtpReq::Lfsr1));
-        scdc.push(ltp(LtpReq::Lfsr2));
-        scdc.push(frl_started()); // ltp_req = None → success (after_iterations = 4)
-
-        let (_outcome, trace) = FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &TrainingConfig::default())
-            .await
-            .unwrap();
-
-        let ltp_events: Vec<_> = trace
-            .events
-            .iter()
-            .filter(|e| matches!(e, TrainingEvent::LtpPatternRequested { .. }))
-            .collect();
-        assert_eq!(ltp_events.len(), 2); // Lfsr1 once, Lfsr2 once
-        assert_eq!(
-            ltp_events[0],
-            &TrainingEvent::LtpPatternRequested {
-                pattern: LtpReq::Lfsr1
-            }
-        );
-        assert_eq!(
-            ltp_events[1],
-            &TrainingEvent::LtpPatternRequested {
-                pattern: LtpReq::Lfsr2
-            }
-        );
-        assert!(trace.events.contains(&TrainingEvent::AllLanesSatisfied {
-            after_iterations: 4
-        }));
-    }
-
-    // -------------------------------------------------------------------------
-    // Error propagation through train_at_rate_traced
-    // -------------------------------------------------------------------------
-
-    #[pollster::test]
-    async fn trace_error_write_frl_config() {
-        let mut scdc = SimScdc::new();
-        scdc.fail_write_frl_config = true;
-        assert!(
-            FrlTrainer::new(scdc, MockPhy::new())
-                .train_at_rate_traced(RATE, &TrainingConfig::default())
-                .await
-                .is_err()
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_error_set_frl_rate() {
-        let mut phy = MockPhy::new();
-        phy.fail_set_frl_rate = true;
-        assert!(
-            FrlTrainer::new(SimScdc::new(), phy)
-                .train_at_rate_traced(RATE, &TrainingConfig::default())
-                .await
-                .is_err()
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_error_read_training_status_phase2() {
-        let mut scdc = SimScdc::new();
-        scdc.push_err();
-        assert!(
-            FrlTrainer::new(scdc, MockPhy::new())
-                .train_at_rate_traced(RATE, &TrainingConfig::default())
-                .await
-                .is_err()
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_error_read_training_status_phase3() {
-        let mut scdc = SimScdc::new();
-        scdc.push(flt_ready());
-        scdc.push_err();
-        assert!(
-            FrlTrainer::new(scdc, MockPhy::new())
-                .train_at_rate_traced(RATE, &TrainingConfig::default())
-                .await
-                .is_err()
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_error_read_training_status_phase4() {
-        let mut scdc = SimScdc::new();
-        scdc.push(flt_ready());
-        scdc.push(frl_started());
-        scdc.push_err();
-        assert!(
-            FrlTrainer::new(scdc, MockPhy::new())
-                .train_at_rate_traced(RATE, &TrainingConfig::default())
-                .await
-                .is_err()
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_error_read_ced() {
-        let mut scdc = SimScdc::new();
-        scdc.push(flt_ready());
-        scdc.push(frl_started());
-        scdc.push(ltp(LtpReq::Lfsr0));
-        scdc.fail_read_ced = true;
-        assert!(
-            FrlTrainer::new(scdc, MockPhy::new())
-                .train_at_rate_traced(RATE, &TrainingConfig::default())
-                .await
-                .is_err()
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_error_send_ltp() {
-        let mut scdc = SimScdc::new();
-        scdc.push(flt_ready());
-        scdc.push(frl_started());
-        scdc.push(ltp(LtpReq::Lfsr0));
-        let mut phy = MockPhy::new();
-        phy.fail_send_ltp = true;
-        assert!(
-            FrlTrainer::new(scdc, phy)
-                .train_at_rate_traced(RATE, &TrainingConfig::default())
-                .await
-                .is_err()
-        );
-    }
-
-    #[pollster::test]
-    async fn trace_config_recorded_and_timeout_interpretable() {
-        let config = cfg(5, 7, 9);
-        let mut scdc = SimScdc::new();
-        for _ in 0..5 {
-            scdc.push(not_ready());
+#[pollster::test]
+async fn exit_to_tmds_recovers_a_dropped_train_future() {
+    // Training that waits on every operation and never passes, so it is still running
+    // when it is dropped.
+    let sink = Sink {
+        waits: true,
+        ..Sink::training(&[per_lane(); 64])
+    };
+    let phy = Phy {
+        waits: true,
+        ..Phy::default()
+    };
+    let mut trainer = FrlTrainer::new(sink, phy);
+    let config = TrainingConfig::default();
+    {
+        let mut train = core::pin::pin!(trainer.train(&[RATE], &config));
+        let mut cx = Context::from_waker(core::task::Waker::noop());
+        for _ in 0..40 {
+            assert!(train.as_mut().poll(&mut cx).is_pending());
         }
-
-        let (_outcome, trace) = FrlTrainer::new(scdc, MockPhy::new())
-            .train_at_rate_traced(RATE, &config)
-            .await
-            .unwrap();
-
-        assert_eq!(trace.config, config);
-        assert!(trace.events.contains(&TrainingEvent::FltReadyTimeout {
-            iterations_elapsed: 5
-        }));
-        assert_eq!(trace.config.flt_ready_timeout, 5);
     }
+    assert!(
+        trainer.scdc.configured,
+        "the dropped future left the sink in FRL"
+    );
+
+    assert_eq!(trainer.exit_to_tmds().await, Ok(()));
+    let (sink, phy) = trainer.into_parts();
+    assert!(!sink.configured);
+    assert_eq!(phy.rates.last(), Some(&HdmiForumFrl::NotSupported));
+}
+
+#[pollster::test]
+async fn undefined_requests_come_back_as_warnings() {
+    let mut reserved = per_lane();
+    reserved.lane2 = LtpReq::Reserved(0xC);
+    let sink = Sink {
+        waits: true,
+        ..Sink::training(&[reserved, all(LtpReq::None)])
+    };
+    let trained = FrlTrainer::new(sink, Phy::default())
+        .train(&[RATE], &TrainingConfig::default())
+        .await
+        .unwrap();
+    assert!(matches!(
+        trained.warnings(),
+        [TrainingWarning::UndefinedLtpRequest {
+            lane: 2,
+            value: 0xC,
+            count: 1,
+            in_use: true,
+            ..
+        }]
+    ));
+}
+
+#[pollster::test]
+async fn train_with_events_reports_each_event_over_async_io() {
+    let sink = Sink {
+        waits: true,
+        ..Sink::training(&[per_lane(), all(LtpReq::None)])
+    };
+    let mut events = Vec::new();
+    let trained = FrlTrainer::new(sink, Phy::default())
+        .train_with_events(&[RATE], &TrainingConfig::default(), &mut |event| {
+            events.push(event)
+        })
+        .await
+        .unwrap();
+    assert!(matches!(
+        trained.outcome,
+        TrainingOutcome::Success {
+            achieved_rate: RATE,
+            ..
+        }
+    ));
+    assert!(matches!(
+        events[..2],
+        [
+            TrainingEvent::SourceTestConfigRead { config, .. },
+            TrainingEvent::FltReady { after_polls: 2, .. },
+        ] if config == SourceTestConfig::default()
+    ));
+    assert!(matches!(
+        events.last(),
+        Some(TrainingEvent::FrlStart { .. })
+    ));
+}
+
+#[pollster::test]
+async fn the_trainer_gives_access_to_its_client_and_phy() {
+    let mut trainer = FrlTrainer::new(Sink::default(), Phy::default());
+    trainer
+        .phy_mut()
+        .set_frl_output(FrlOutput::Active)
+        .await
+        .unwrap();
+    trainer.scdc_mut().read_flt_ready().await.unwrap();
+    assert_eq!(trainer.phy().outputs, [FrlOutput::Active]);
+    assert_eq!(trainer.scdc().flt_ready_polls, 1);
+}
+
+/// `Sink` behind the `Send` twin: each method forwards to the plain `ScdcClient`.
+struct SendSink(Sink);
+
+impl SendScdcClient for SendSink {
+    type Error = &'static str;
+
+    async fn read_flt_ready(&mut self) -> Result<bool, &'static str> {
+        ScdcClient::read_flt_ready(&mut self.0).await
+    }
+
+    async fn read_update_flags(&mut self) -> Result<UpdateFlags, &'static str> {
+        ScdcClient::read_update_flags(&mut self.0).await
+    }
+
+    async fn clear_update_flags(
+        &mut self,
+        flags: ClearableUpdateFlags,
+    ) -> Result<(), &'static str> {
+        ScdcClient::clear_update_flags(&mut self.0, flags).await
+    }
+
+    async fn read_ltp_requests(&mut self) -> Result<LtpRequests, &'static str> {
+        ScdcClient::read_ltp_requests(&mut self.0).await
+    }
+
+    async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, &'static str> {
+        ScdcClient::read_source_test_config(&mut self.0).await
+    }
+
+    async fn write_config_0_defaults(&mut self) -> Result<(), &'static str> {
+        ScdcClient::write_config_0_defaults(&mut self.0).await
+    }
+
+    async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), &'static str> {
+        ScdcClient::write_frl_config(&mut self.0, config).await
+    }
+
+    async fn read_ced(&mut self) -> Result<CedCounters, &'static str> {
+        ScdcClient::read_ced(&mut self.0).await
+    }
+}
+
+/// `Phy` behind hdmi-hal-async's `Send` twin.
+struct SendPhy(Phy);
+
+impl SendHdmiPhy for SendPhy {
+    type Error = &'static str;
+
+    async fn set_frl_rate(&mut self, rate: HdmiForumFrl) -> Result<(), &'static str> {
+        HdmiPhy::set_frl_rate(&mut self.0, rate).await
+    }
+
+    async fn send_ltp(&mut self, patterns: LanePatterns) -> Result<(), &'static str> {
+        HdmiPhy::send_ltp(&mut self.0, patterns).await
+    }
+
+    async fn set_frl_output(&mut self, output: FrlOutput) -> Result<(), &'static str> {
+        HdmiPhy::set_frl_output(&mut self.0, output).await
+    }
+
+    async fn adjust_equalization(&mut self, params: EqParams) -> Result<(), &'static str> {
+        HdmiPhy::adjust_equalization(&mut self.0, params).await
+    }
+
+    async fn set_scrambling(&mut self, enabled: bool) -> Result<(), &'static str> {
+        HdmiPhy::set_scrambling(&mut self.0, enabled).await
+    }
+}
+
+type SendResults<C, P> = (
+    Result<Trained, TrainingError<C, P>>,
+    Result<(), ExitError<C, P>>,
+    Result<Trained, TrainingError<C, P>>,
+);
+
+/// Trains, exits, trains again with events and, with `alloc`, traced.
+async fn train_exit_train<C: ScdcClient, P: HdmiPhy>(
+    trainer: &mut FrlTrainer<C, P>,
+    config: &TrainingConfig,
+    events: &mut usize,
+) -> SendResults<C::Error, P::Error> {
+    let trained = trainer.train(&[RATE], config).await;
+    let exit = trainer.exit_to_tmds().await;
+    let with_events = trainer
+        .train_with_events(&[RATE], config, &mut |_| *events += 1)
+        .await;
+    #[cfg(feature = "alloc")]
+    {
+        let (_, trace) = trainer.train_traced(&[RATE], config).await;
+        *events += trace.events.len();
+    }
+    (trained, exit, with_events)
+}
+
+/// [`train_exit_train`] generic over the `Send` twins, as a future that must be `Send`:
+/// this compiles only if every training future is `Send` in generic code, so it could be
+/// spawned on a multi-threaded executor.
+fn spawnable<'a, C: SendScdcClient, P: SendHdmiPhy>(
+    trainer: &'a mut FrlTrainer<C, P>,
+    config: &'a TrainingConfig,
+    events: &'a mut usize,
+) -> impl Future<Output = SendResults<C::Error, P::Error>> + Send + 'a {
+    train_exit_train(trainer, config, events)
+}
+
+#[pollster::test]
+async fn the_send_twins_train_in_generic_send_code() {
+    let sink = Sink {
+        waits: true,
+        ..Sink::training(&[per_lane(), all(LtpReq::None)])
+    };
+    let mut trainer = FrlTrainer::new(SendSink(sink), SendPhy(Phy::default()));
+    let mut config = TrainingConfig::default();
+    // The second attempt finds no more requests; keep its timeout short.
+    config.ltp_polls = 10;
+    let mut events = 0;
+    let (trained, exit, with_events) = spawnable(&mut trainer, &config, &mut events).await;
+    assert!(matches!(
+        trained.map(|trained| trained.outcome),
+        Ok(TrainingOutcome::Success {
+            achieved_rate: RATE,
+            ..
+        })
+    ));
+    assert_eq!(exit, Ok(()));
+    assert!(with_events.is_ok());
+    assert!(events > 0);
+    // The operations training does not use, through the blanket implementations.
+    let (mut sink, mut phy) = trainer.into_parts();
+    assert!(ScdcClient::read_ced(&mut sink).await.is_ok());
+    assert_eq!(HdmiPhy::set_scrambling(&mut phy, true).await, Ok(()));
 }
