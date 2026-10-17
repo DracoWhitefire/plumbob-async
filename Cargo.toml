@@ -1,6 +1,6 @@
 [package]
 name = "plumbob-async"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 description = "Async FRL link training state machine for HDMI 2.1"
@@ -15,9 +15,9 @@ alloc = ["plumbob/alloc"]
 std = ["alloc", "plumbob/std"]
 
 [dependencies]
-plumbob = { version = "0.1.2", default-features = false }
-hdmi-hal-async = { version = "0.1.0", default-features = false }
-display-types = { version = "0.3.1", default-features = false }
+plumbob = { version = "0.3.1", default-features = false }
+hdmi-hal-async = { version = "0.2.1", default-features = false }
+display-types = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 pollster = { version = "0.3", features = ["macro"] }
