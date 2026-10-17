@@ -19,8 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `read_ltp_requests`, `read_source_test_config`, `write_config_0_defaults`,
   `write_frl_config` and `read_ced`. `read_training_status` and the `TrainingStatus`
   re-export are removed.
-- **`TrainingOutcome::FallbackRequired` carries a `reason`** (a `FallbackReason`), and `TrainingConfig`, `LtpReq`, `FfeLevels`, `FrlConfig` and
-  `TrainingEvent` follow plumbob's new definitions.
+- **`TrainingOutcome::FallbackRequired` carries a `reason`** (a `FallbackReason`), and
+  `TrainingConfig`, `LtpReq`, `FfeLevels`, `FrlConfig` and `TrainingEvent` follow
+  plumbob's new definitions.
 - **`TrainingError` reports what happened to the link**, as in plumbob: an SCDC or PHY
   error is followed by LTS:L, the variants are `Scdc { error, exit }` and
   `Phy { error, exit }` with `exit` a `TmdsExit`, and a fallback whose LTS:L fails is
