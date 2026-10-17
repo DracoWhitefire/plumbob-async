@@ -40,4 +40,5 @@ pub use plumbob::TrainingTrace;
 pub use hdmi_hal_async::phy::HdmiPhy;
 pub use hdmi_hal_async::{
     EqParams, FrlOutput, HdmiForumFrl, LaneEqParams, LanePatterns, LtpPattern, TxFfeLevel,
+    TxFfeRestrictions,
 };

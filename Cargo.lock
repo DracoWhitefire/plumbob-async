@@ -28,9 +28,9 @@ dependencies = [
 
 [[package]]
 name = "hdmi-hal-async"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c23174fee8992bdec9dfd80e4873965bcda210c4451b90bdf4266d6f35842685"
+checksum = "0fb0b2e0e4fdaddc61d61c63a3eeeb2a72ac7d5227125199d5bf662de758d5ed"
 dependencies = [
  "display-types",
  "hdmi-hal",

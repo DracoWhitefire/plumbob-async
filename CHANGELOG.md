@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`plumbob` updated to 0.3**: `FrlTrainer` runs plumbob 0.3's state machine and
   re-exports its types; the entries marked "as in plumbob" come from it. See plumbob's
   changelog.
-- **`hdmi-hal-async` updated to 0.2**: `FrlTrainer`'s PHY implements hdmi-hal-async
+- **`hdmi-hal-async` updated to 0.2.1**: `FrlTrainer`'s PHY implements hdmi-hal-async
   0.2's `HdmiPhy`. Implementations must take the per-lane `send_ltp(LanePatterns)`, add
   `set_frl_output(FrlOutput)`, use `LtpPattern`'s variants (HDMI 2.1 values; `new` is
   removed) and apply the TxFFE level now carried in `LaneEqParams`. See hdmi-hal-async's
@@ -70,6 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The tester's TxFFE restrictions reach the PHY**, as in plumbob. The three TxFFE bits
+  of `Source_Test_Configuration` (pre-shoot only, de-emphasis only, no FFE) go to
+  `HdmiPhy::adjust_equalization` as `TxFfeRestrictions` (re-exported), with every
+  equalization of the attempt; when a `Source_Test_Update` seen on any LTS:3 or LTS:P poll
+  changes them, the lanes' levels are sent again with the new restrictions at once. A
+  `Source_Test_Update` is handled on every such poll, also without `FLT_update`. How to
+  combine the bits is the PHY's (see hdmi-hal-async 0.2.1 and hdmi-hal 0.5.1).
 - **`FrlTrainer::phy`, `phy_mut`, `scdc` and `scdc_mut`**, as in plumbob.
 - Re-exports of `HdmiForumFrl`, the async `HdmiPhy` and the PHY types, from
   `hdmi-hal-async`, so callers and PHY implementations need no direct dependency on it.

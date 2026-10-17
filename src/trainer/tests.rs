@@ -13,7 +13,9 @@ use display_types::cea861::hdmi_forum::HdmiForumFrl;
 use hdmi_hal_async::LtpPattern;
 
 use super::*;
-use crate::{CedCounters, FallbackReason, LtpReq, TrainingOutcome, TrainingWarning};
+use crate::{
+    CedCounters, FallbackReason, LtpReq, TrainingOutcome, TrainingWarning, TxFfeRestrictions,
+};
 
 const RATE: HdmiForumFrl = HdmiForumFrl::Rate6Gbps4Lanes;
 
@@ -294,12 +296,18 @@ async fn a_source_test_update_during_training_reaches_the_phy() {
     let (sink, phy) = trainer.into_parts();
     assert!(!sink.flags.source_test_update);
     // The equalization of LTS:2's rate setup, then the re-send with the new restrictions.
-    let no_ffe_sent: Vec<bool> = phy
+    let restrictions: Vec<TxFfeRestrictions> = phy
         .equalization
         .iter()
-        .map(|eq| eq.tx_ffe_restrictions.no_ffe)
+        .map(|eq| eq.tx_ffe_restrictions)
         .collect();
-    assert_eq!(no_ffe_sent, [false, true]);
+    assert_eq!(
+        restrictions,
+        [
+            TxFfeRestrictions::default(),
+            TxFfeRestrictions::new(false, false, true)
+        ]
+    );
 }
 
 #[pollster::test]
