@@ -77,8 +77,8 @@ for warning in trained.iter_warnings() {
 ```
 
 After `Success`, start video on the PHY the trainer holds —
-`trainer.phy_mut().set_frl_output(FrlOutput::Active).await` — or on the PHY `into_parts`
-returns. `scdc`, `scdc_mut`, `phy` and `phy_mut` give access to both in between.
+`trainer.phy_mut().set_frl_output(FrlOutput::Active).await`, with `FrlOutput` and the
+`HdmiPhy` trait imported from `plumbob_async` — or on the PHY `into_parts` returns. `scdc`, `scdc_mut`, `phy` and `phy_mut` give access to both in between.
 
 The `HdmiPhy` bound on `P` is `hdmi_hal_async::phy::HdmiPhy`. The `FrlConfig`,
 `TrainingConfig`, `Trained`, `TrainingOutcome`, `TrainingWarning`, `TrainingError`, and

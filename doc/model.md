@@ -1,8 +1,8 @@
 # Data Model
 
 All protocol and training types used by plumbob-async are defined in `plumbob` and
-re-exported here. This document lists the re-exports, the two types defined in
-plumbob-async itself, and the boundary at which `culvert-async` converts its
+re-exported here. This document lists the re-exports, the traits and type defined in
+plumbob-async itself (`ScdcClient`, `SendScdcClient`, `FrlTrainer`), and the boundary at which `culvert-async` converts its
 register-layer types into plumbob's vocabulary.
 
 For field-level documentation of each re-exported type, see

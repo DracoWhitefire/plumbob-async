@@ -22,7 +22,9 @@ The library itself imposes no executor constraint. Any runtime that can drive an
   per-lane requests posted with `FLT_update` once `Config_1` holds an FRL rate, then
   `FRL_start`. It can raise `Source_Test_Update` before training, change
   `Source_Test_Configuration` (raising `Source_Test_Update`) once LTS:3 begins, fail any
-  one operation, and make every operation wait.
+  one operation, and make every operation wait. It records the flags it is asked to clear,
+  its `Config_0` writes and the `FrlConfig`s written, and returns distinct per-lane CED
+  counts.
 - `SendSink` and `SendPhy` — the same doubles behind the `Send` twins, `SendScdcClient`
   and `SendHdmiPhy`.
 - `Phy` — an async `HdmiPhy` that records the rates, patterns, output modes and
@@ -33,7 +35,8 @@ The library itself imposes no executor constraint. Any runtime that can drive an
 The tests check:
 
 - A full training run through async I/O, with the per-lane patterns, the gap-only output
-  and the TxFFE reset and raise reaching the PHY
+  and the TxFFE reset and raise reaching the PHY, and exactly the `Update_0` clears and
+  `Config_1` writes plumbob makes reaching the sink
 - **I/O that waits gives the same result** as I/O that does not, compared trace for trace
   (requires `alloc`)
 - A `Source_Test_Update` during LTS:3: the new register read, the flag cleared, and the
@@ -46,7 +49,14 @@ The tests check:
 - **The `Send` twins in generic code**: a function generic over `SendScdcClient` and
   `SendHdmiPhy` must return a `Send` future that trains, runs `exit_to_tmds`, trains with
   events and (with `alloc`) traced; it compiles only if all of them are `Send`, and it runs
-  over waiting I/O
+  over a sink that waits. `read_ced`, which training does not call, gets its own `Send`
+  check
+- **The twin forwards every operation unchanged**: the same scripted sink through the
+  plain client and through `SendSink` gives the same result, events, sink records and
+  PHY records
+- Undefined LTP requests coming back as `TrainingWarning`s
+- The accessors (`scdc`, `scdc_mut`, `phy`, `phy_mut`) and the test doubles' operations
+  that training does not use
 - `exit_to_tmds` over async I/O: the LTS:L steps reaching both ends, each end's error on
   failure, and recovering a `train` future dropped mid-training (polled by hand over
   waiting I/O, then dropped with the sink still configured for FRL)

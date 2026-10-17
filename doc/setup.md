@@ -21,10 +21,16 @@ cargo rustdoc --features std -- -D missing_docs
 ## Running tests
 
 ```sh
+rustup target add thumbv7em-none-eabi                # once, for the no_std builds
+
 cargo test --features std                            # std (default for tests)
-cargo build --no-default-features --features alloc  # alloc-only build check
-cargo build --no-default-features                   # bare no_std build check
+cargo test --no-default-features                     # tests without alloc
+cargo build --no-default-features --features alloc --target thumbv7em-none-eabi
+cargo build --no-default-features --target thumbv7em-none-eabi
 ```
+
+The `no_std` builds target `thumbv7em-none-eabi`, as CI does: on the host, `std` is
+always available, so a host build cannot catch a dependency that enables it.
 
 ## Measuring coverage
 

@@ -24,7 +24,8 @@ plumbob-async covers:
 - `ScdcClient`: the async typed SCDC interface trait, the counterpart of
   `plumbob::ScdcClient`, and its `Send` twin `SendScdcClient`,
 - `FrlTrainer<C, P>`: owns an async `ScdcClient` and an async `HdmiPhy` and runs
-  `plumbob::lts::run` over them (`train`, `train_at_rate` and their traced forms),
+  `plumbob::lts::run` over them (`train`, `train_at_rate`, their traced forms and
+  `train_with_events`), and runs LTS:L on its own (`exit_to_tmds`),
 - re-exports of the shared protocol and training types from `plumbob`.
 
 The following are out of scope:

@@ -39,9 +39,10 @@ pub use plumbob::{
 #[cfg(feature = "alloc")]
 pub use plumbob::TrainingTrace;
 
-/// The FRL rate and the async PHY interface `FrlTrainer` drives, re-exported from
-/// `hdmi-hal-async` so that callers and PHY implementations use the same versions
-/// plumbob-async does without depending on that crate themselves.
+// The FRL rate and the async PHY interface `FrlTrainer` drives (and its `Send` twin),
+// re-exported from `hdmi-hal-async` so that callers and PHY implementations use the same
+// versions plumbob-async does without depending on that crate themselves. A plain comment:
+// a doc comment here would head the inlined documentation of every item re-exported.
 pub use hdmi_hal_async::phy::{HdmiPhy, SendHdmiPhy};
 pub use hdmi_hal_async::{
     EqParams, FrlOutput, HdmiForumFrl, LaneEqParams, LanePatterns, LtpPattern, TxFfeLevel,
