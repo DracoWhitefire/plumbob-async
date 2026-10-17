@@ -85,7 +85,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `train` future.
 - **Cancellation is documented**: `train` is not cancel-safe, since a dropped future
   cannot run LTS:L; the README and architecture document say to call `exit_to_tmds`
-  afterwards and to prefer the poll limits over external timeouts.
+  afterwards and to prefer the poll limits over external timeouts. For a wall-clock
+  deadline or a cancel signal, the documented way is plumbob's: the `ScdcClient` fails one
+  polled read with its own error, so training stops through LTS:L and `train` returns
+  `TrainingError::Scdc`, with both ends in TMDS.
 - Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `ClearableUpdateFlags`,
   `SourceTestConfig`, `TmdsExit` and `ExitError`, so an `ScdcClient` implementation needs
   no direct dependency on plumbob.

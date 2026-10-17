@@ -122,6 +122,14 @@ attempt that hits one ends in a defined state — with LTS:L already run, or, wh
 sets `FLT_no_timeout` (compliance testing), with the link held for the test equipment
 (`TrainingOutcome::NoTimeoutHold`).
 
+For a wall-clock deadline, or to stop on a signal without dropping the future, fail one
+polled `ScdcClient` read with an error of your own and let every later call through:
+training stops, LTS:L returns both ends to TMDS, and `train` returns
+`TrainingError::Scdc` with your error. Never fail a read made after LTS:L has begun
+(after a `write_frl_config` with `HdmiForumFrl::NotSupported`). LTS:L is skipped with
+`TrainingConfig::exit_to_tmds_on_error` off, and the link is held while the sink sets
+`FLT_no_timeout`; `plumbob::ScdcClient`'s "Stopping early" has the details.
+
 ## Diagnostics
 
 Enable the `alloc` feature to get `train_traced` (and `train_at_rate_traced`), which
@@ -199,10 +207,11 @@ or runtime crate.
 - **PHY vendor sequences** — plumbob-async calls `HdmiPhy` methods; the register
   sequences live in platform PHY backends.
 - **Timing and inter-poll delay** — the poll limits in `TrainingConfig` are the only
-  timeout mechanism; the interval belongs inside the polled `ScdcClient` methods, and
-  awaiting it is what lets other tasks run: an `ScdcClient` whose futures are always
-  ready keeps the executor for the whole `train` call (up to 7000 polls with the
-  defaults; see plumbob's architecture document for the bound).
+  timeout mechanism, and a wall-clock deadline is the caller's (see "Cancellation"); the
+  interval belongs inside the polled `ScdcClient` methods, and awaiting it is what lets
+  other tasks run: an `ScdcClient` whose futures are always ready keeps the executor for
+  the whole `train` call (up to 7000 polls with the defaults; see plumbob's architecture
+  document for the bound).
 - **Executor dependency** — no runtime crate is in the dependency graph. The futures are
   not required to be `Send`: code generic over `ScdcClient` and `HdmiPhy` runs on a
   single-threaded executor or keeps the types concrete (see the architecture document).

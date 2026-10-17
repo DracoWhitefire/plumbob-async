@@ -39,7 +39,8 @@ The following are out of scope:
   are in platform PHY backends.
 - **Timing** — the poll limits in `TrainingConfig` assume one poll every 2 ms by default.
   The interval belongs inside the polled `ScdcClient` methods, where an async
-  implementation can await a timer.
+  implementation can await a timer, and so does a wall-clock deadline or a cancel signal
+  (see "Cancellation" below).
 - **Executor dependency** — the traits impose no constraint on which async runtime is used.
 
 ---
@@ -148,6 +149,13 @@ or run `exit_to_tmds` straight away. The documented recovery is that a caller wh
 a `train` future calls `exit_to_tmds()` before anything else. Bounding training with an
 external timeout is discouraged in favour of `TrainingConfig`'s poll limits, which end
 every attempt in a defined state.
+
+A deadline or cancel signal the poll limits cannot express belongs in the `ScdcClient`:
+one polled read fails with the caller's own error and every later call goes through, so
+training stops through LTS:L and `train` returns `TrainingError::Scdc` with both ends in
+TMDS (unless `exit_to_tmds_on_error` is off or the sink sets `FLT_no_timeout`), where a
+dropped future leaves them as they were. A read made after LTS:L has begun must not fail. plumbob's `ScdcClient` documentation ("Stopping early") and architecture
+document ("How long one `train` call can take") cover the rule and the bound.
 
 ---
 

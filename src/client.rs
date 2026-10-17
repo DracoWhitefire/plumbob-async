@@ -7,8 +7,13 @@ use crate::{
 /// This is the async counterpart to [`plumbob::ScdcClient`]: the same methods with the
 /// same meaning, each an `async fn`. See that trait for what implementations must
 /// guarantee, including where the poll interval belongs (inside the polled methods; an
-/// async implementation can await a timer there). `culvert-async` implements it for its
-/// `Scdc<T>`.
+/// async implementation can await a timer there) and how to stop training early ("Stopping
+/// early"): for a deadline or a cancel signal, return one error of your own from a polled
+/// read and let every later call through. Training then ends through LTS:L, and `train`
+/// returns [`TrainingError::Scdc`](crate::TrainingError::Scdc) with that error; unlike a
+/// dropped `train` future, this leaves both ends in TMDS (unless
+/// `exit_to_tmds_on_error` is off or the sink sets `FLT_no_timeout`). Never fail a read
+/// made after LTS:L has begun. `culvert-async` implements it for its `Scdc<T>`.
 pub trait ScdcClient {
     /// Error type returned by SCDC operations.
     type Error;
