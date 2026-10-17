@@ -51,12 +51,7 @@ async fn operation(
 }
 
 fn all(req: LtpReq) -> LtpRequests {
-    LtpRequests::new(
-        req,
-        req,
-        req,
-        req,
-    )
+    LtpRequests::new(req, req, req, req)
 }
 
 /// A scripted sink: `FLT_ready` after `flt_ready_after` polls, then each set of requests
@@ -76,10 +71,9 @@ struct Sink {
 impl Sink {
     /// A sink that raises `Source_Test_Update` before training.
     fn with_source_test(self) -> Self {
-        Self {
-            flags: UpdateFlags::new(true, false, false, false, false, false, false),
-            ..self
-        }
+        let mut flags = UpdateFlags::default();
+        flags.source_test_update = true;
+        Self { flags, ..self }
     }
 
     fn training(rounds: &[LtpRequests]) -> Self {
@@ -203,12 +197,7 @@ impl HdmiPhy for Phy {
 }
 
 fn per_lane() -> LtpRequests {
-    LtpRequests::new(
-        LtpReq::Lfsr0,
-        LtpReq::Lfsr1,
-        LtpReq::Lfsr2,
-        LtpReq::Lfsr3,
-    )
+    LtpRequests::new(LtpReq::Lfsr0, LtpReq::Lfsr1, LtpReq::Lfsr2, LtpReq::Lfsr3)
 }
 
 #[pollster::test]
@@ -216,12 +205,13 @@ async fn trains_through_async_io() {
     let sink = Sink::training(&[per_lane(), all(LtpReq::FfeChange), all(LtpReq::None)]);
     let mut trainer = FrlTrainer::new(sink, Phy::default());
     let outcome = trainer.train(&[RATE], &TrainingConfig::default()).await;
-    assert_eq!(
+    assert!(matches!(
         outcome.map(|trained| trained.outcome),
         Ok(TrainingOutcome::Success {
-            achieved_rate: RATE
+            achieved_rate: RATE,
+            ..
         })
-    );
+    ));
     let (_, phy) = trainer.into_parts();
     assert_eq!(phy.rates, [RATE]);
     assert!(phy.patterns.contains(&LanePatterns {
@@ -277,18 +267,18 @@ async fn a_source_test_configuration_is_read() {
     let (outcome, trace) = trainer
         .train_traced(&[RATE], &TrainingConfig::default())
         .await;
-    assert_eq!(
+    assert!(matches!(
         outcome.map(|trained| trained.outcome),
         Ok(TrainingOutcome::Success {
-            achieved_rate: RATE
+            achieved_rate: RATE,
+            ..
         })
-    );
-    assert_eq!(
+    ));
+    assert!(matches!(
         trace.events.first(),
-        Some(&TrainingEvent::SourceTestConfigRead {
-            flt_no_timeout: false
-        })
-    );
+        Some(TrainingEvent::SourceTestConfigRead { config, .. })
+            if *config == SourceTestConfig::default()
+    ));
 }
 
 #[pollster::test]
@@ -297,12 +287,14 @@ async fn a_fallback_returns_the_phy_to_tmds() {
     let mut config = TrainingConfig::default();
     config.flt_ready_polls = 3;
     let outcome = trainer.train_at_rate(RATE, &config).await;
-    assert_eq!(
+    assert!(matches!(
         outcome.map(|trained| trained.outcome),
         Ok(TrainingOutcome::FallbackRequired {
-            reason: FallbackReason::FltReadyTimeout
+            reason: FallbackReason::FltReadyTimeout,
+            ..
         })
-    );
+    ));
+
     let (_, phy) = trainer.into_parts();
     assert_eq!(phy.rates.last(), Some(&HdmiForumFrl::NotSupported));
 }
@@ -357,23 +349,22 @@ async fn traced_training_records_the_attempt() {
     let config = TrainingConfig::default();
     let mut trainer = FrlTrainer::new(Sink::training(&[all(LtpReq::None)]), Phy::default());
     let (outcome, trace) = trainer.train_at_rate_traced(RATE, &config).await;
-    assert_eq!(
+    assert!(matches!(
         outcome.map(|trained| trained.outcome),
         Ok(TrainingOutcome::Success {
-            achieved_rate: RATE
+            achieved_rate: RATE,
+            ..
         })
-    );
+    ));
     assert_eq!(trace.rates, [RATE]);
     assert_eq!(trace.config, config);
-    assert_eq!(
+    assert!(matches!(
         trace.events[..2],
         [
-            TrainingEvent::SourceTestConfigRead {
-                flt_no_timeout: false
-            },
-            TrainingEvent::FltReady { after_polls: 2 },
-        ]
-    );
+            TrainingEvent::SourceTestConfigRead { config, .. },
+            TrainingEvent::FltReady { after_polls: 2, .. },
+        ] if config == SourceTestConfig::default()
+    ));
     assert!(matches!(
         trace.events.last(),
         Some(TrainingEvent::FrlStart { .. })
@@ -468,10 +459,8 @@ async fn exit_to_tmds_recovers_a_dropped_train_future() {
 
 #[pollster::test]
 async fn undefined_requests_come_back_as_warnings() {
-    let reserved = LtpRequests {
-        lane2: LtpReq::Reserved(0xC),
-        ..per_lane()
-    };
+    let mut reserved = per_lane();
+    reserved.lane2 = LtpReq::Reserved(0xC);
     let sink = Sink {
         waits: true,
         ..Sink::training(&[reserved, all(LtpReq::None)])
@@ -480,13 +469,16 @@ async fn undefined_requests_come_back_as_warnings() {
         .train(&[RATE], &TrainingConfig::default())
         .await
         .unwrap();
-    let warning = TrainingWarning::UndefinedLtpRequest {
-        lane: 2,
-        value: 0xC,
-        count: 1,
-        in_use: true,
-    };
-    assert!(trained.iter_warnings().eq([warning].iter()));
+    assert!(matches!(
+        trained.warnings(),
+        [TrainingWarning::UndefinedLtpRequest {
+            lane: 2,
+            value: 0xC,
+            count: 1,
+            in_use: true,
+            ..
+        }]
+    ));
 }
 
 #[pollster::test]
@@ -502,28 +494,20 @@ async fn train_with_events_reports_each_event_over_async_io() {
         })
         .await
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         trained.outcome,
         TrainingOutcome::Success {
-            achieved_rate: RATE
+            achieved_rate: RATE,
+            ..
         }
-    );
-    assert_eq!(
+    ));
+    assert!(matches!(
         events[..2],
         [
-            TrainingEvent::SourceTestConfigRead {
-                config: SourceTestConfig {
-                    txffe_pre_shoot_only: false,
-                    txffe_de_emphasis_only: false,
-                    txffe_no_ffe: false,
-                    flt_no_timeout: false,
-                    dsc_frl_max: false,
-                    frl_max: false,
-                },
-            },
-            TrainingEvent::FltReady { after_polls: 2 },
-        ]
-    );
+            TrainingEvent::SourceTestConfigRead { config, .. },
+            TrainingEvent::FltReady { after_polls: 2, .. },
+        ] if config == SourceTestConfig::default()
+    ));
     assert!(matches!(
         events.last(),
         Some(TrainingEvent::FrlStart { .. })
