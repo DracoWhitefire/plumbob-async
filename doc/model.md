@@ -12,26 +12,27 @@ For field-level documentation of each re-exported type, see
 
 ## Re-exported from `plumbob`
 
-| Type               | Kind   | Notes                                                                                                     |
-|--------------------|--------|-----------------------------------------------------------------------------------------------------------|
-| `LtpReq`           | enum   | One lane's request: 0x0 (trained), 0x1–0x8 (patterns), 0xE, 0xF, or `Reserved` (0x9–0xD)                  |
-| `LtpRequests`      | struct | The requests for all four lanes                                                                           |
-| `FfeLevels`        | struct | Highest TxFFE level index (0–7), written to `Config_1`                                                    |
-| `FrlConfig`        | struct | `Config_1`: the rate and FFE levels                                                                       |
-| `UpdateFlags`      | struct | The `Update_0` training flags read and cleared                                                            |
-| `SourceTestConfig` | struct | `FLT_no_timeout` from `Source_Test_Configuration`                                                         |
-| `CedCount`         | struct | 15-bit per-lane character error count                                                                     |
-| `CedCounters`      | struct | Per-lane `Option<CedCount>`; `lane3` is `None` in 3-lane mode                                             |
-| `TrainingConfig`   | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit                                         |
-| `Trained`          | struct | What `train` returns: the `outcome` and the attempt's `TrainingWarning`s                                  |
-| `TrainingOutcome`  | enum   | `Success { achieved_rate }`, `FallbackRequired { reason }`, or `NoTimeoutHold { rate }`                   |
-| `TrainingWarning`  | enum   | A non-fatal anomaly, such as an undefined LTP request; repeats merged                                     |
-| `FallbackReason`   | enum   | Why an attempt ended without a link                                                                       |
-| `TrainingError`    | enum   | Hard failure: `Scdc { error, exit }` or `Phy { error, exit }`; `ExitFailed`; `InvalidRates`; or `NoRates` |
-| `TmdsExit`         | enum   | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, `Skipped` or `HeldUnderTest`                          |
-| `ExitError`        | struct | A failed LTS:L: each end's first error (`scdc`, `phy`)                                                    |
-| `TrainingEvent`    | enum   | One trace event                                                                                           |
-| `TrainingTrace`    | struct | The rates, config and ordered events of an attempt (`alloc` feature)                                      |
+| Type                   | Kind   | Notes                                                                                                     |
+|------------------------|--------|-----------------------------------------------------------------------------------------------------------|
+| `LtpReq`               | enum   | One lane's request: 0x0 (trained), 0x1–0x8 (patterns), 0xE, 0xF, or `Reserved` (0x9–0xD)                  |
+| `LtpRequests`          | struct | The requests for all four lanes; `new(…)` takes them in lane order                                        |
+| `FfeLevels`            | struct | Highest TxFFE level index (0–7), written to `Config_1`                                                    |
+| `FrlConfig`            | struct | `Config_1`: the rate (`frl_rate`) and FFE levels; `new(…)`                                                |
+| `UpdateFlags`          | struct | All seven `Update_0` flags; `new(…)` (bit order) or set fields on the default                             |
+| `ClearableUpdateFlags` | struct | The flags `clear_update_flags` takes: all but `RR_Test`                                                   |
+| `SourceTestConfig`     | struct | All six `Source_Test_Configuration` bits; `new(…)` or set fields on the default                           |
+| `CedCount`             | struct | 15-bit per-lane character error count                                                                     |
+| `CedCounters`          | struct | Per-lane `Option<CedCount>`; `lane3` is `None` in 3-lane mode; `new(…)`                                   |
+| `TrainingConfig`       | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit                                         |
+| `Trained`              | struct | What `train` returns: the `outcome` and the attempt's warnings (`warnings()`)                             |
+| `TrainingOutcome`      | enum   | `Success { achieved_rate, .. }`, `FallbackRequired { reason, .. }`, or `NoTimeoutHold { rate, .. }`       |
+| `TrainingWarning`      | enum   | A non-fatal anomaly, such as an undefined LTP request; repeats merged                                     |
+| `FallbackReason`       | enum   | Why an attempt ended without a link                                                                       |
+| `TrainingError`        | enum   | Hard failure: `Scdc { error, exit }` or `Phy { error, exit }`; `ExitFailed`; `InvalidRates`; or `NoRates` |
+| `TmdsExit`             | enum   | What LTS:L did after an I/O failure: `Exited`, `Failed(ExitError)`, `Skipped` or `HeldUnderTest`          |
+| `ExitError`            | struct | A failed LTS:L: each end's first error (`scdc`, `phy`)                                                    |
+| `TrainingEvent`        | enum   | One trace event                                                                                           |
+| `TrainingTrace`        | struct | The rates, config and ordered events of an attempt (`alloc` feature)                                      |
 
 ---
 
@@ -83,6 +84,7 @@ These are `plumbob`'s types, re-exported unchanged:
 `culvert-async` implements `plumbob_async::ScdcClient` for its `Scdc<T>` behind a
 `plumbob-async` cargo feature, as `culvert` does for `plumbob::ScdcClient`: each trait
 method calls one `culvert-async` method and converts culvert's register types to
-plumbob's (`culvert::LtpRequests` → `plumbob::LtpRequests`, and so on). The conversions
-are the same as culvert's, since both crates use culvert's types; `culvert-async`'s own
-types are unchanged.
+plumbob's (`culvert::LtpRequests` → `plumbob::LtpRequests`, and so on). plumbob's SCDC
+types mirror culvert's field for field, so each conversion is one-to-one, and the
+conversions are the same as culvert's, since both crates use culvert's types;
+`culvert-async`'s own types are unchanged.

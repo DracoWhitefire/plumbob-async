@@ -20,8 +20,9 @@ The library itself imposes no executor constraint. Any runtime that can drive an
 
 - `Sink` — a scripted async `ScdcClient`: `FLT_ready` after N polls, then each set of
   per-lane requests posted with `FLT_update` once `Config_1` holds an FRL rate, then
-  `FRL_start`. It can raise `Source_Test_Update`, fail any one operation, and make every
-  operation wait.
+  `FRL_start`. It can raise `Source_Test_Update` before training, change
+  `Source_Test_Configuration` (raising `Source_Test_Update`) once LTS:3 begins, fail any
+  one operation, and make every operation wait.
 - `Phy` — an async `HdmiPhy` that records the rates, patterns, output modes and
   equalization it is given, with the same failure and waiting options.
 - Waiting is real: `WaitOnce` is a future that returns `Pending` once and wakes itself
@@ -33,7 +34,8 @@ The tests check:
   and the TxFFE reset and raise reaching the PHY
 - **I/O that waits gives the same result** as I/O that does not, compared trace for trace
   (requires `alloc`)
-- A source test configuration being read (requires `alloc`)
+- A `Source_Test_Update` during LTS:3: the new register read, the flag cleared, and the
+  new `TxFfeRestrictions` sent to the PHY with the lanes' levels
 - A fallback returning the PHY to TMDS
 - `TrainingError::Scdc` and `TrainingError::Phy` carrying the error from every SCDC and
   PHY operation the state machine uses

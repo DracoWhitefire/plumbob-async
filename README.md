@@ -29,7 +29,8 @@ each method must guarantee):
 
 ```rust
 use plumbob_async::{
-    CedCounters, FrlConfig, LtpRequests, ScdcClient, SourceTestConfig, UpdateFlags,
+    CedCounters, ClearableUpdateFlags, FrlConfig, LtpRequests, ScdcClient, SourceTestConfig,
+    UpdateFlags,
 };
 
 struct MyScdcClient { /* async I²C / DDC transport */ }
@@ -40,7 +41,7 @@ impl ScdcClient for MyScdcClient {
     // Polled in LTS:2 and LTS:3/LTS:P: await the poll interval (2 ms by default) here.
     async fn read_flt_ready(&mut self) -> Result<bool, MyError> { todo!() }
     async fn read_update_flags(&mut self) -> Result<UpdateFlags, MyError> { todo!() }
-    async fn clear_update_flags(&mut self, flags: UpdateFlags) -> Result<(), MyError> { todo!() }
+    async fn clear_update_flags(&mut self, flags: ClearableUpdateFlags) -> Result<(), MyError> { todo!() }
     async fn read_ltp_requests(&mut self) -> Result<LtpRequests, MyError> { todo!() }
     async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, MyError> { todo!() }
     async fn write_config_0_defaults(&mut self) -> Result<(), MyError> { todo!() }
@@ -66,8 +67,8 @@ let rates = [
 
 let trained = trainer.train(&rates, &config).await?;
 match trained.outcome {
-    TrainingOutcome::Success { achieved_rate } => println!("Trained at {achieved_rate:?}"),
-    TrainingOutcome::FallbackRequired { reason } => println!("No FRL link: {reason:?}"),
+    TrainingOutcome::Success { achieved_rate, .. } => println!("Trained at {achieved_rate:?}"),
+    TrainingOutcome::FallbackRequired { reason, .. } => println!("No FRL link: {reason:?}"),
     _ => {}
 }
 for warning in trained.iter_warnings() {

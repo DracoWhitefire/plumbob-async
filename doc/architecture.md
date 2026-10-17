@@ -73,7 +73,7 @@ pub trait ScdcClient {
 
     async fn read_flt_ready(&mut self) -> Result<bool, Self::Error>;
     async fn read_update_flags(&mut self) -> Result<UpdateFlags, Self::Error>;
-    async fn clear_update_flags(&mut self, flags: UpdateFlags) -> Result<(), Self::Error>;
+    async fn clear_update_flags(&mut self, flags: ClearableUpdateFlags) -> Result<(), Self::Error>;
     async fn read_ltp_requests(&mut self) -> Result<LtpRequests, Self::Error>;
     async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, Self::Error>;
     async fn write_config_0_defaults(&mut self) -> Result<(), Self::Error>;
@@ -158,16 +158,17 @@ path:
 
 ```rust
 pub use plumbob::{
-    CedCount, CedCounters, ExitError, FallbackReason, FfeLevels, FrlConfig, LtpReq,
-    LtpRequests, SourceTestConfig, TmdsExit, Trained, TrainingConfig, TrainingError,
-    TrainingEvent, TrainingOutcome, TrainingWarning, UpdateFlags, MAX_WARNINGS,
+    CedCount, CedCounters, ClearableUpdateFlags, ExitError, FallbackReason, FfeLevels,
+    FrlConfig, LtpReq, LtpRequests, MAX_WARNINGS, SourceTestConfig, TmdsExit, Trained,
+    TrainingConfig, TrainingError, TrainingEvent, TrainingOutcome, TrainingWarning,
+    UpdateFlags,
 };
 #[cfg(feature = "alloc")]
 pub use plumbob::TrainingTrace;
 ```
 
 `HdmiForumFrl` comes from `display-types`; the `hdmi-hal` data types (`LanePatterns`,
-`FrlOutput`, `EqParams`, …) from `hdmi-hal-async`.
+`FrlOutput`, `EqParams`, `TxFfeRestrictions`, …) from `hdmi-hal-async`.
 
 ---
 
