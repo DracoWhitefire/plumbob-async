@@ -90,8 +90,9 @@ accept.
 
 ### `Send` futures: `SendScdcClient`
 
-With concrete `ScdcClient` and `HdmiPhy` types whose futures are `Send`, the `train`
-future is `Send` and can be spawned on a multi-threaded runtime. Code generic over the
+With concrete `ScdcClient` and `HdmiPhy` types whose futures and error types are `Send`,
+the `train` future is `Send` and can be spawned on a multi-threaded runtime
+(`train_with_events` also needs a `Send` callback). Code generic over the
 plain traits cannot spawn it, whatever it bounds the types by: an `async fn` in a trait
 promises nothing about its future. For that code, `SendScdcClient` is `ScdcClient`'s
 `Send` twin, as `SendHdmiPhy` (re-exported from hdmi-hal-async) is `HdmiPhy`'s: the same
@@ -99,7 +100,10 @@ methods, each returning a future that is `Send`, a `Send` error, and `Send` as a
 supertrait, since the futures borrow the client mutably. A blanket implementation makes
 every `SendScdcClient` an `ScdcClient`, so `FrlTrainer` takes either; with both twins,
 the futures of every training method and of `exit_to_tmds` are `Send` in generic code.
-A test checks this at compile time, generic over the twins.
+A test checks this at compile time, generic over the twins. The code must be bounded by
+the twins alone: with `C: SendScdcClient + ScdcClient` the compiler uses the explicit
+`ScdcClient` bound rather than the blanket implementation, and the futures are opaque
+again (not known to be `Send`); likewise `+ HdmiPhy`.
 
 This needs plumbob 0.3.1: earlier releases held a `Cell` across `.await`s in
 `plumbob::lts::run`, so no training future was `Send`, concrete or not. Return-type
@@ -165,8 +169,11 @@ A deadline or cancel signal the poll limits cannot express belongs in the `ScdcC
 one polled read fails with the caller's own error and every later call goes through, so
 training stops through LTS:L and `train` returns `TrainingError::Scdc` with both ends in
 TMDS (unless `exit_to_tmds_on_error` is off or the sink sets `FLT_no_timeout`), where a
-dropped future leaves them as they were. A read made after LTS:L has begun must not fail. plumbob's `ScdcClient` documentation ("Stopping early") and architecture
-document ("How long one `train` call can take") cover the rule and the bound.
+dropped future leaves them as they were. A read made after LTS:L has begun (after a
+`write_frl_config` with `NotSupported`) must not fail, until a `write_frl_config` with an
+FRL rate starts training again. plumbob's `ScdcClient` documentation ("Stopping early")
+and architecture document ("How long one `train` call can take") cover the rule and the
+bound.
 
 ---
 

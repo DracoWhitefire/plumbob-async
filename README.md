@@ -37,8 +37,9 @@ struct MyScdcClient { /* async I²C / DDC transport */ }
 impl ScdcClient for MyScdcClient {
     type Error = MyError;
 
-    // Polled in LTS:2 and LTS:3/LTS:P: await the poll interval (2 ms by default) here.
+    // Status_Flags_0 bit 6. Polled in LTS:2: await the poll interval (2 ms by default) here.
     async fn read_flt_ready(&mut self) -> Result<bool, MyError> { todo!() }
+    // Update_0, all seven flags. Polled in LTS:3 and LTS:P: await the poll interval here too.
     async fn read_update_flags(&mut self) -> Result<UpdateFlags, MyError> { todo!() }
     async fn clear_update_flags(&mut self, flags: ClearableUpdateFlags) -> Result<(), MyError> { todo!() }
     async fn read_ltp_requests(&mut self) -> Result<LtpRequests, MyError> { todo!() }
@@ -92,7 +93,10 @@ and `HdmiPhy` cannot spawn training on a multi-threaded executor. For that, impl
 `Send` twins, `SendScdcClient` and hdmi-hal-async's `SendHdmiPhy` (re-exported): the same
 methods, returning futures that are `Send`, with errors that are `Send`. With both,
 the futures of `train`, the other training methods and `exit_to_tmds` are `Send` in
-generic code:
+generic code (`train_with_events` given a `Send` callback). Bound the code by the twins
+alone, as below: adding `+ ScdcClient` or `+ HdmiPhy`, which the twins imply anyway, makes
+the compiler use that bound instead of the blanket implementation, and the futures are no
+longer known to be `Send`:
 
 ```rust
 use plumbob_async::{FrlTrainer, HdmiForumFrl, SendHdmiPhy, SendScdcClient, TrainingConfig};
@@ -122,7 +126,7 @@ A twin implementation is also an implementation of the plain trait, so it works 
 code written against either. Import the trait your code is bounded by: with both in
 scope, method calls on a twin implementation are ambiguous. Code that keeps the types
 concrete needs no twins: its `train` future is `Send` when the client's and PHY's futures
-are.
+and error types are.
 
 ## Training procedure
 
@@ -165,7 +169,8 @@ For a wall-clock deadline, or to stop on a signal without dropping the future, f
 polled `ScdcClient` read with an error of your own and let every later call through:
 training stops, LTS:L returns both ends to TMDS, and `train` returns
 `TrainingError::Scdc` with your error. Never fail a read made after LTS:L has begun
-(after a `write_frl_config` with `HdmiForumFrl::NotSupported`). LTS:L is skipped with
+(after a `write_frl_config` with `HdmiForumFrl::NotSupported`), until a
+`write_frl_config` with an FRL rate starts training again. LTS:L is skipped with
 `TrainingConfig::exit_to_tmds_on_error` off, and the link is held while the sink sets
 `FLT_no_timeout`; `plumbob::ScdcClient`'s "Stopping early" has the details.
 
