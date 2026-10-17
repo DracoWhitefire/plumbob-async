@@ -105,7 +105,12 @@ the twins alone: with `C: SendScdcClient + ScdcClient` the compiler uses the exp
 `ScdcClient` bound rather than the blanket implementation, and the futures are opaque
 again (not known to be `Send`); likewise `+ HdmiPhy`.
 
-This needs plumbob 0.3.1: earlier releases held a `Cell` across `.await`s in
+The blanket implementation costs this crate one option: it cannot add forwarding
+implementations of `ScdcClient` (for `&mut C` or `Box<C>`), which would overlap with it
+(E0119). Other crates lose nothing: they implement `ScdcClient` for their own types as
+before, and the orphan rule never let them write a blanket implementation of it.
+
+This needs plumbob 0.3.1: plumbob 0.2.0 and 0.3.0 held a `Cell` across `.await`s in
 `plumbob::lts::run`, so no training future was `Send`, concrete or not. Return-type
 notation would let callers bound the plain traits' futures instead, and replace the
 twins, once it is stable; the stack design document ("Sync and Async Companions")

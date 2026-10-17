@@ -19,11 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `read_ltp_requests`, `read_source_test_config`, `write_config_0_defaults`,
   `write_frl_config` and `read_ced`. `read_training_status` and the `TrainingStatus`
   re-export are removed.
-- **`FrlTrainer::train(rates, config)`** trains over a list of rates, stepping down when
-  the sink requests it; `train_at_rate` is `train` with one rate. `train_traced` joins
-  `train_at_rate_traced`.
-- **`TrainingOutcome::FallbackRequired` carries a `reason`** (`FallbackReason`, now
-  re-exported), and `TrainingConfig`, `LtpReq`, `FfeLevels`, `FrlConfig` and
+- **`TrainingOutcome::FallbackRequired` carries a `reason`** (a `FallbackReason`), and `TrainingConfig`, `LtpReq`, `FfeLevels`, `FrlConfig` and
   `TrainingEvent` follow plumbob's new definitions.
 - **`TrainingError` reports what happened to the link**, as in plumbob: an SCDC or PHY
   error is followed by LTS:L, the variants are `Scdc { error, exit }` and
@@ -35,14 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TrainingError` is now `#[non_exhaustive]`.
 - **`TrainingOutcome::NoTimeoutHold { rate }`**, as in plumbob: while the sink sets
   `FLT_no_timeout`, a poll cap that runs out leaves the link as it is for the test
-  equipment instead of falling back. Code matching on `TrainingOutcome` needs an arm for
-  it (the enum was already `#[non_exhaustive]`).
+  equipment instead of falling back. The enum was already `#[non_exhaustive]`, so a match
+  compiles unchanged and reaches its wildcard arm; handle the variant explicitly, since
+  the link is left in FRL.
 - **`train` and `train_at_rate` return `Trained`**, as in plumbob: the outcome with the
   attempt's `TrainingWarning`s, read with `warnings()` (a slice) or `iter_warnings()`, the
   same API with and without `alloc` (`Trained`, `TrainingWarning` and `MAX_WARNINGS` are
   re-exported).
 - **The traced methods return the trace whatever the result**, as in plumbob:
-  `(Result<Trained, TrainingError>, TrainingTrace)`.
+  `(Result<Trained, TrainingError>, TrainingTrace)` instead of
+  `Result<(TrainingOutcome, TrainingTrace), TrainingError>`.
+- **`TrainingTrace` records the list of rates**, as in plumbob: its `rate` field is
+  replaced by `rates`, and `TrainingTrace::new` takes the rates.
 - **Every struct variant of `TrainingOutcome`, `TrainingError`, `TrainingWarning` and
   `TrainingEvent` is `#[non_exhaustive]`**, as in plumbob, so a later release can add a
   field to one without breaking callers. Patterns need `..` (`TrainingOutcome::Success {
@@ -51,8 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on it instead (`matches!`, or a pattern with `..`).
 - **The SCDC types mirror culvert's**, as in plumbob. `FrlConfig::rate` is renamed
   `frl_rate`. `FrlConfig`, `LtpRequests`, `CedCounters`, `UpdateFlags` and
-  `SourceTestConfig` are `#[non_exhaustive]`: build them with `new(…)`, or by setting
-  fields on the default. `UpdateFlags` has all seven `Update_0` flags and
+  `SourceTestConfig` are `#[non_exhaustive]`: build `FrlConfig`, `LtpRequests` and
+  `CedCounters` with `new(…)`, and `UpdateFlags` and `SourceTestConfig` with `new(…)` or
+  by setting fields on the default. `UpdateFlags` has all seven `Update_0` flags and
   `SourceTestConfig` all six `Source_Test_Configuration` bits, and
   `TrainingEvent::SourceTestConfigRead` carries the register as read (`config`). An
   `ScdcClient` fills every field in `read_update_flags` and `read_source_test_config`, and
@@ -60,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the source never clears.
 - **`plumbob` updated to 0.3.1**: `FrlTrainer` runs plumbob 0.3's state machine and
   re-exports its types; the entries marked "as in plumbob" come from it. See plumbob's
-  changelog. 0.3.1 is needed for `Send` futures: earlier releases kept state in the
+  changelog. 0.3.1 is needed for `Send` futures: plumbob 0.2.0 and 0.3.0 kept state in the
   training future that is not `Send`.
 - **`hdmi-hal-async` updated to 0.2.1**: `FrlTrainer`'s PHY implements hdmi-hal-async
   0.2's `HdmiPhy`. Implementations must take the per-lane `send_ltp(LanePatterns)`, add
@@ -87,6 +88,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes them, the lanes' levels are sent again with the new restrictions at once. A
   `Source_Test_Update` is handled on every such poll, also without `FLT_update`. How to
   combine the bits is the PHY's (see hdmi-hal-async 0.2.1 and hdmi-hal 0.5.1).
+- **`FrlTrainer::train(rates, config)`** trains over a list of rates, stepping down when
+  the sink requests it; `train_at_rate` is `train` with one rate. `train_traced` joins
+  `train_at_rate_traced`.
 - **`FrlTrainer::phy`, `phy_mut`, `scdc` and `scdc_mut`**, as in plumbob.
 - Re-exports of `HdmiForumFrl`, the async `HdmiPhy` and the PHY types, from
   `hdmi-hal-async`, so callers and PHY implementations need no direct dependency on it.
@@ -98,14 +102,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   afterwards and to prefer the poll limits over external timeouts. For a wall-clock
   deadline or a cancel signal, the documented way is plumbob's: the `ScdcClient` fails one
   polled read with its own error, so training stops through LTS:L and `train` returns
-  `TrainingError::Scdc`, with both ends in TMDS.
+  `TrainingError::Scdc`, with both ends in TMDS (unless `exit_to_tmds_on_error` is off or
+  the sink sets `FLT_no_timeout`).
 - Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `ClearableUpdateFlags`,
   `SourceTestConfig`, `TmdsExit` and `ExitError`, so an `ScdcClient` implementation needs
   no direct dependency on plumbob.
-  `TrainingEvent` is re-exported without the `alloc` feature, and
-  `FrlTrainer::train_with_events` delivers each event to a callback as it occurs, so
-  targets without an allocator get the full reasoning too.
-
+- **`FrlTrainer::train_with_events`** delivers each `TrainingEvent` to a callback as it
+  occurs, and `TrainingEvent` is re-exported without the `alloc` feature, so targets
+  without an allocator get the full reasoning too.
 - **SLSA Build Level 2 provenance** — release artifacts are attested via
   `actions/attest-build-provenance` and verified with
   `gh attestation verify <file> --repo DracoWhitefire/plumbob-async`.
