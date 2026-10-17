@@ -55,7 +55,8 @@ fn all(req: LtpReq) -> LtpRequests {
 }
 
 /// A scripted sink: `FLT_ready` after `flt_ready_after` polls, then each set of requests
-/// posted with `FLT_update` in turn once `Config_1` holds a rate, then `FRL_start`.
+/// posted with `FLT_update` in turn once `Config_1` holds a rate, then `FRL_start`. A
+/// `source_test_change` is applied, with `Source_Test_Update`, on the first poll after that.
 #[derive(Default)]
 struct Sink {
     flt_ready_after: Option<u32>,
@@ -64,6 +65,8 @@ struct Sink {
     frl_start: bool,
     configured: bool,
     flags: UpdateFlags,
+    source_test: SourceTestConfig,
+    source_test_change: Option<SourceTestConfig>,
     waits: bool,
     fail: Option<&'static str>,
 }
@@ -101,6 +104,10 @@ impl ScdcClient for Sink {
     async fn read_update_flags(&mut self) -> Result<UpdateFlags, &'static str> {
         operation(self.waits, self.fail, "read_update_flags").await?;
         if self.configured {
+            if let Some(config) = self.source_test_change.take() {
+                self.source_test = config;
+                self.flags.source_test_update = true;
+            }
             if self.rounds.is_empty() {
                 self.flags.frl_start |= self.frl_start;
             } else {
@@ -134,7 +141,7 @@ impl ScdcClient for Sink {
 
     async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, &'static str> {
         operation(self.waits, self.fail, "read_source_test_config").await?;
-        Ok(SourceTestConfig::default())
+        Ok(self.source_test)
     }
 
     async fn write_config_0_defaults(&mut self) -> Result<(), &'static str> {
@@ -259,13 +266,22 @@ async fn io_that_waits_gives_the_same_result() {
     assert_eq!(actual, expected);
 }
 
-#[cfg(feature = "alloc")]
 #[pollster::test]
-async fn a_source_test_configuration_is_read() {
-    let sink = Sink::training(&[all(LtpReq::None)]).with_source_test();
+async fn a_source_test_update_during_training_reaches_the_phy() {
+    let mut no_ffe = SourceTestConfig::default();
+    no_ffe.txffe_no_ffe = true;
+    let sink = Sink {
+        source_test_change: Some(no_ffe),
+        ..Sink::training(&[per_lane(), all(LtpReq::None)])
+    };
     let mut trainer = FrlTrainer::new(sink, Phy::default());
-    let (outcome, trace) = trainer
-        .train_traced(&[RATE], &TrainingConfig::default())
+    let mut reads = Vec::new();
+    let outcome = trainer
+        .train_with_events(&[RATE], &TrainingConfig::default(), &mut |event| {
+            if let TrainingEvent::SourceTestConfigRead { config, .. } = event {
+                reads.push(config);
+            }
+        })
         .await;
     assert!(matches!(
         outcome.map(|trained| trained.outcome),
@@ -274,11 +290,16 @@ async fn a_source_test_configuration_is_read() {
             ..
         })
     ));
-    assert!(matches!(
-        trace.events.first(),
-        Some(TrainingEvent::SourceTestConfigRead { config, .. })
-            if *config == SourceTestConfig::default()
-    ));
+    assert_eq!(reads, [SourceTestConfig::default(), no_ffe]);
+    let (sink, phy) = trainer.into_parts();
+    assert!(!sink.flags.source_test_update);
+    // The equalization of LTS:2's rate setup, then the re-send with the new restrictions.
+    let no_ffe_sent: Vec<bool> = phy
+        .equalization
+        .iter()
+        .map(|eq| eq.tx_ffe_restrictions.no_ffe)
+        .collect();
+    assert_eq!(no_ffe_sent, [false, true]);
 }
 
 #[pollster::test]
