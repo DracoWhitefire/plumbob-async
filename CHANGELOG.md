@@ -38,10 +38,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   equipment instead of falling back. Code matching on `TrainingOutcome` needs an arm for
   it (the enum was already `#[non_exhaustive]`).
 - **`train` and `train_at_rate` return `Trained`**, as in plumbob: the outcome with the
-  attempt's `TrainingWarning`s (`Trained`, `TrainingWarning` and `MAX_WARNINGS` are
+  attempt's `TrainingWarning`s, read with `warnings()` (a slice) or `iter_warnings()`, the
+  same API with and without `alloc` (`Trained`, `TrainingWarning` and `MAX_WARNINGS` are
   re-exported).
 - **The traced methods return the trace whatever the result**, as in plumbob:
   `(Result<Trained, TrainingError>, TrainingTrace)`.
+- **Every struct variant of `TrainingOutcome`, `TrainingError`, `TrainingWarning` and
+  `TrainingEvent` is `#[non_exhaustive]`**, as in plumbob, so a later release can add a
+  field to one without breaking callers. Patterns need `..` (`TrainingOutcome::Success {
+  achieved_rate, .. }`), and code outside plumbob cannot build these variants: tests that
+  compare an outcome, error or trace with `assert_eq!` against a constructed value match
+  on it instead (`matches!`, or a pattern with `..`).
+- **The SCDC types mirror culvert's**, as in plumbob. `FrlConfig::rate` is renamed
+  `frl_rate`. `FrlConfig`, `LtpRequests`, `CedCounters`, `UpdateFlags` and
+  `SourceTestConfig` are `#[non_exhaustive]`: build them with `new(…)`, or by setting
+  fields on the default. `UpdateFlags` has all seven `Update_0` flags and
+  `SourceTestConfig` all six `Source_Test_Configuration` bits, and
+  `TrainingEvent::SourceTestConfigRead` carries the register as read (`config`). An
+  `ScdcClient` fills every field in `read_update_flags` and `read_source_test_config`, and
+  its `clear_update_flags` takes a `ClearableUpdateFlags`: every flag but `RR_Test`, which
+  the source never clears.
+- **`plumbob` updated to 0.3**: `FrlTrainer` runs plumbob 0.3's state machine and
+  re-exports its types; the entries marked "as in plumbob" come from it. See plumbob's
+  changelog.
 - **`hdmi-hal-async` updated to 0.2**: `FrlTrainer`'s PHY implements hdmi-hal-async
   0.2's `HdmiPhy`. Implementations must take the per-lane `send_ltp(LanePatterns)`, add
   `set_frl_output(FrlOutput)`, use `LtpPattern`'s variants (HDMI 2.1 values; `new` is
@@ -60,8 +79,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cancellation is documented**: `train` is not cancel-safe, since a dropped future
   cannot run LTS:L; the README and architecture document say to call `exit_to_tmds`
   afterwards and to prefer the poll limits over external timeouts.
-- Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `SourceTestConfig`,
-  `TmdsExit` and `ExitError`.
+- Re-exports of `FallbackReason`, `LtpRequests`, `UpdateFlags`, `ClearableUpdateFlags`,
+  `SourceTestConfig`, `TmdsExit` and `ExitError`, so an `ScdcClient` implementation needs
+  no direct dependency on plumbob.
   `TrainingEvent` is re-exported without the `alloc` feature, and
   `FrlTrainer::train_with_events` delivers each event to a callback as it occurs, so
   targets without an allocator get the full reasoning too.
@@ -80,6 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tests compile without the `alloc` feature** — the tests that use the traced methods
   are gated on `alloc`, and CI and the publish workflow also run the tests with no
   features, so plain `cargo test` builds again.
+- **A test covers a `Source_Test_Update` during training** — the test sink can change
+  `Source_Test_Configuration` in LTS:3, and the test checks that the new register is read,
+  the flag cleared and the new TxFFE restrictions sent to the PHY. The test it replaces
+  passed whether or not the flag was raised.
 
 ## [0.1.0] - 2026-04-04
 
