@@ -80,7 +80,6 @@ pub trait ScdcClient {
     async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, Self::Error>;
     async fn write_config_0_defaults(&mut self) -> Result<(), Self::Error>;
     async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), Self::Error>;
-    async fn read_ced(&mut self) -> Result<CedCounters, Self::Error>;
 }
 ```
 
@@ -190,7 +189,7 @@ path:
 
 ```rust
 pub use plumbob::{
-    CedCount, CedCounters, ClearableUpdateFlags, ExitError, FallbackReason, FfeLevels,
+    ClearableUpdateFlags, ExitError, FallbackReason, FfeLevels,
     FrlConfig, LtpReq, LtpRequests, MAX_WARNINGS, SourceTestConfig, TmdsExit, Trained,
     TrainingConfig, TrainingError, TrainingEvent, TrainingOutcome, TrainingWarning,
     UpdateFlags,

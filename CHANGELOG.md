@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **`read_ced` is removed from `ScdcClient` and `SendScdcClient`, and the `CedCount` and
+  `CedCounters` re-exports with it**, as in plumbob. Training never read the CED counters;
+  a diagnostics method on the link training trait only made every implementation carry
+  one. Implementations delete their `read_ced`. To read the counters, use the SCDC
+  implementation directly (culvert-async's `read_ced`), or a trait of your own in the
+  integration layer.
+
 ### Changed
 
 - **Part of Ashlar** — the README now opens with a block naming the

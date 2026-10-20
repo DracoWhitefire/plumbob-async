@@ -22,3 +22,9 @@ display-types = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 pollster = { version = "0.3", features = ["macro"] }
+
+# Temporary, until plumbob (without `read_ced`) and display-types 0.4.3 are published:
+# replaces both for the whole graph. Remove before merging.
+[patch.crates-io]
+plumbob = { path = "../plumbob" }
+display-types = { path = "../display-types" }

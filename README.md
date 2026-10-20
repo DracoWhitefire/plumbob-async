@@ -42,8 +42,7 @@ each method must guarantee):
 
 ```rust
 use plumbob_async::{
-    CedCounters, ClearableUpdateFlags, FrlConfig, LtpRequests, ScdcClient, SourceTestConfig,
-    UpdateFlags,
+    ClearableUpdateFlags, FrlConfig, LtpRequests, ScdcClient, SourceTestConfig, UpdateFlags,
 };
 
 struct MyScdcClient { /* async I²C / DDC transport */ }
@@ -60,7 +59,6 @@ impl ScdcClient for MyScdcClient {
     async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, MyError> { todo!() }
     async fn write_config_0_defaults(&mut self) -> Result<(), MyError> { todo!() }
     async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), MyError> { todo!() }
-    async fn read_ced(&mut self) -> Result<CedCounters, MyError> { todo!() }
 }
 ```
 
@@ -119,7 +117,7 @@ impl SendScdcClient for MyThreadSafeScdcClient {
     type Error = MyError;
 
     async fn read_flt_ready(&mut self) -> Result<bool, MyError> { todo!() }
-    // … the other seven methods, as for `ScdcClient`
+    // … the other six methods, as for `ScdcClient`
 }
 
 fn spawn_training<C, P>(mut trainer: FrlTrainer<C, P>, rates: &'static [HdmiForumFrl])

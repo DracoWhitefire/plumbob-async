@@ -1,6 +1,4 @@
-use crate::{
-    CedCounters, ClearableUpdateFlags, FrlConfig, LtpRequests, SourceTestConfig, UpdateFlags,
-};
+use crate::{ClearableUpdateFlags, FrlConfig, LtpRequests, SourceTestConfig, UpdateFlags};
 
 /// Async typed SCDC interface required by the FRL training state machine.
 ///
@@ -54,11 +52,6 @@ pub trait ScdcClient {
     ///
     /// Async counterpart to [`plumbob::ScdcClient::write_frl_config`].
     async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), Self::Error>;
-
-    /// Read the per-lane character error counters, for diagnostics.
-    ///
-    /// Async counterpart to [`plumbob::ScdcClient::read_ced`].
-    async fn read_ced(&mut self) -> Result<CedCounters, Self::Error>;
 }
 
 /// [`ScdcClient`] with `Send` futures, for code that spawns link training on a
@@ -120,9 +113,6 @@ pub trait SendScdcClient: Send {
         &mut self,
         config: FrlConfig,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
-
-    /// See [`ScdcClient::read_ced`].
-    fn read_ced(&mut self) -> impl Future<Output = Result<CedCounters, Self::Error>> + Send;
 }
 
 impl<T: SendScdcClient> ScdcClient for T {
@@ -162,9 +152,5 @@ impl<T: SendScdcClient> ScdcClient for T {
         config: FrlConfig,
     ) -> impl Future<Output = Result<(), Self::Error>> {
         <T as SendScdcClient>::write_frl_config(self, config)
-    }
-
-    fn read_ced(&mut self) -> impl Future<Output = Result<CedCounters, Self::Error>> {
-        <T as SendScdcClient>::read_ced(self)
     }
 }

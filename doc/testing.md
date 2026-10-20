@@ -49,8 +49,7 @@ The tests check:
 - **The `Send` twins in generic code**: a function generic over `SendScdcClient` and
   `SendHdmiPhy` must return a `Send` future that trains, runs `exit_to_tmds`, trains with
   events and (with `alloc`) traced; it compiles only if all of them are `Send`, and it runs
-  over a sink that waits. `read_ced`, which training does not call, gets its own `Send`
-  check
+  over a sink that waits
 - **The twin forwards every operation unchanged**: the same scripted sink through the
   plain client and through `SendSink` gives the same result, events, sink records and
   PHY records
