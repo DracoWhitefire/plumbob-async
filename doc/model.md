@@ -39,7 +39,7 @@ For field-level documentation of each re-exported type, see
 ### `ScdcClient`
 
 The trait defined in this crate: the async counterpart of `plumbob::ScdcClient`, with
-the same eight operations, meaning and implementer obligations, each an `async fn`.
+the same seven operations, meaning and implementer obligations, each an `async fn`.
 It is a distinct trait: a type implementing the sync trait does not implement this one.
 Async transports implement this trait; sync transports implement `plumbob::ScdcClient`.
 

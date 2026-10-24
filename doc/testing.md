@@ -23,8 +23,7 @@ The library itself imposes no executor constraint. Any runtime that can drive an
   `FRL_start`. It can raise `Source_Test_Update` before training, change
   `Source_Test_Configuration` (raising `Source_Test_Update`) once LTS:3 begins, fail any
   one operation, and make every operation wait. It records the flags it is asked to clear,
-  its `Config_0` writes and the `FrlConfig`s written, and returns distinct per-lane CED
-  counts.
+  its `Config_0` writes and the `FrlConfig`s written.
 - `SendSink` and `SendPhy` — the same doubles behind the `Send` twins, `SendScdcClient`
   and `SendHdmiPhy`.
 - `Phy` — an async `HdmiPhy` that records the rates, patterns, output modes and

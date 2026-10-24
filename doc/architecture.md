@@ -66,7 +66,7 @@ plumbob          ─┴───────────────────
 
 ## Async `ScdcClient`
 
-The async counterpart to `plumbob::ScdcClient`: the same eight operations with the same
+The async counterpart to `plumbob::ScdcClient`: the same seven operations with the same
 meaning and implementer obligations, each an `async fn`.
 
 ```rust
