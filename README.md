@@ -11,15 +11,15 @@
 > **Part of [Ashlar](https://ashlar-display.org)** — a display connection stack in Rust,
 > HDMI 2.1 first: from EDID parsing through mode negotiation to FRL link training.
 >
-> [display-types](https://github.com/DracoWhitefire/display-types) ·
-> [piaf](https://github.com/DracoWhitefire/piaf) ·
-> [concordance](https://github.com/DracoWhitefire/concordance) ·
-> [cartouche](https://github.com/DracoWhitefire/cartouche) ·
-> [culvert](https://github.com/DracoWhitefire/culvert) ·
-> [plumbob](https://github.com/DracoWhitefire/plumbob) ·
+> [display-types](https://github.com/ashlar-display/display-types) ·
+> [piaf](https://github.com/ashlar-display/piaf) ·
+> [concordance](https://github.com/ashlar-display/concordance) ·
+> [cartouche](https://github.com/ashlar-display/cartouche) ·
+> [culvert](https://github.com/ashlar-display/culvert) ·
+> [plumbob](https://github.com/ashlar-display/plumbob) ·
 > **plumbob-async** ·
-> [hdmi-hal](https://github.com/DracoWhitefire/hdmi-hal) ·
-> [hdmi-hal-i2c-dev](https://github.com/DracoWhitefire/hdmi-hal-i2c-dev)
+> [hdmi-hal](https://github.com/ashlar-display/hdmi-hal) ·
+> [hdmi-hal-i2c-dev](https://github.com/ashlar-display/hdmi-hal-i2c-dev)
 
 Async FRL link training state machine for HDMI 2.1.
 
@@ -146,7 +146,7 @@ The procedure is plumbob's — LTS:2 (prepare), LTS:3 (train), LTS:P (pass), wit
 (lower rate) on the sink's request and LTS:L (exit to TMDS) before every
 `FallbackRequired` and after an I/O error — because it is plumbob's code: `FrlTrainer` runs `plumbob::lts::run`
 over its async SCDC client and PHY. See
-[plumbob's README](https://github.com/DracoWhitefire/plumbob#training-procedure) and
+[plumbob's README](https://github.com/ashlar-display/plumbob#training-procedure) and
 architecture document for the states, the poll and retrain limits, and the per-lane rules.
 
 `FallbackRequired { reason }` means no listed rate trained; `TrainingError` means a hard
