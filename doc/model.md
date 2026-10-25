@@ -6,7 +6,7 @@ plumbob-async itself (`ScdcClient`, `SendScdcClient`, `FrlTrainer`), and the bou
 register-layer types into plumbob's vocabulary.
 
 For field-level documentation of each re-exported type, see
-[`plumbob`'s `doc/model.md`](https://github.com/DracoWhitefire/plumbob/blob/main/doc/model.md).
+[`plumbob`'s `doc/model.md`](https://github.com/ashlar-display/plumbob/blob/main/doc/model.md).
 
 ---
 
