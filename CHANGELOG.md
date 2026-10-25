@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-25
+
+### Breaking changes
+
+- **`read_ced` is removed from `ScdcClient` and `SendScdcClient`, and the `CedCount` and
+  `CedCounters` re-exports with it**, as in plumbob. Training never read the CED counters;
+  a diagnostics method on the link training trait only made every implementation carry
+  one. Implementations delete their `read_ced`. To read the counters, use the SCDC
+  implementation directly (culvert-async's `read_ced`), or a trait of your own in the
+  integration layer.
+- **Requires plumbob 0.4 and hdmi-hal-async 0.3, on hdmi-hal 0.6.** The PHY interface
+  re-exported from hdmi-hal-async (`HdmiPhy`, `SendHdmiPhy`, `EqParams`, `FrlOutput`,
+  `LaneEqParams`, `LanePatterns`, `LtpPattern`, `TxFfeLevel`, `TxFfeRestrictions`) is now
+  built on hdmi-hal 0.6's types: a PHY implementing the previous hdmi-hal-async's
+  `HdmiPhy` no longer fits `FrlTrainer`. Move plumbob (0.4), hdmi-hal-async (0.3) and
+  hdmi-hal (0.6) alongside this crate; the traits themselves are unchanged. `HdmiForumFrl` is
+  display-types' and is unaffected.
+
+### Changed
+
+- **`UpdateFlags::ced_update` and `rsed_update` (re-exported from plumbob) are documented
+  as what they are seen to be:** set by the sink and kept until the source clears them, a
+  hint at most. They no longer say the counters "have been updated".
+- **The docs count seven `ScdcClient` operations**, not eight, now that `read_ced` is gone,
+  and the test sink no longer claims to return CED counts.
+
+- **Part of Ashlar** — the README now opens with a block naming the
+  [Ashlar](https://ashlar-display.org) stack and linking the other crates in it. Keywords
+  are aligned across the stack, with `ashlar` and `hdmi` on every crate; `ashlar` and
+  `async` are added, `frl` and `embedded` are dropped. Categories gain `no-std::no-alloc`.
+  The crate's `homepage` is now the Ashlar website.
+- **Moved to the `ashlar-display` organization** — the repository is now
+  `ashlar-display/plumbob-async` (the old URLs redirect), and `repository` points there.
+  Releases are attested and published from the new repository; 0.2.0, attested before the
+  move, verifies with `--owner DracoWhitefire --signer-repo DracoWhitefire/plumbob-async`
+  (see "Verifying releases" in the README). The code of conduct is now the organization's,
+  shared by every Ashlar repository; the repository's own copy is removed.
+
 ## [0.2.0] - 2026-10-17
 
 ### Breaking changes

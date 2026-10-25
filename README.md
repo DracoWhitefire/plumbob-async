@@ -1,12 +1,25 @@
 # plumbob-async
 
-[![CI](https://github.com/DracoWhitefire/plumbob-async/actions/workflows/ci.yml/badge.svg)](https://github.com/DracoWhitefire/plumbob-async/actions/workflows/ci.yml)
+[![CI](https://github.com/ashlar-display/plumbob-async/actions/workflows/ci.yml/badge.svg)](https://github.com/ashlar-display/plumbob-async/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/plumbob-async.svg)](https://crates.io/crates/plumbob-async)
 [![docs.rs](https://docs.rs/plumbob-async/badge.svg)](https://docs.rs/plumbob-async)
 [![License: MPL-2.0](https://img.shields.io/badge/license-MPL--2.0-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rustc-1.85+-orange.svg)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0.html)
 [![SLSA Level 2](https://slsa.dev/images/gh-badge-level2.svg)](https://slsa.dev)
 [![trusted publishing only](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fcrates.io%2Fapi%2Fv1%2Fcrates%2Fplumbob-async&query=%24.crate.trustpub_only&label=trusted%20publishing%20only)](#verifying-releases)
+
+> **Part of [Ashlar](https://ashlar-display.org)** — a display connection stack in Rust,
+> HDMI 2.1 first: from EDID parsing through mode negotiation to FRL link training.
+>
+> [display-types](https://github.com/DracoWhitefire/display-types) ·
+> [piaf](https://github.com/DracoWhitefire/piaf) ·
+> [concordance](https://github.com/DracoWhitefire/concordance) ·
+> [cartouche](https://github.com/DracoWhitefire/cartouche) ·
+> [culvert](https://github.com/DracoWhitefire/culvert) ·
+> [plumbob](https://github.com/DracoWhitefire/plumbob) ·
+> **plumbob-async** ·
+> [hdmi-hal](https://github.com/DracoWhitefire/hdmi-hal) ·
+> [hdmi-hal-i2c-dev](https://github.com/DracoWhitefire/hdmi-hal-i2c-dev)
 
 Async FRL link training state machine for HDMI 2.1.
 
@@ -29,8 +42,7 @@ each method must guarantee):
 
 ```rust
 use plumbob_async::{
-    CedCounters, ClearableUpdateFlags, FrlConfig, LtpRequests, ScdcClient, SourceTestConfig,
-    UpdateFlags,
+    ClearableUpdateFlags, FrlConfig, LtpRequests, ScdcClient, SourceTestConfig, UpdateFlags,
 };
 
 struct MyScdcClient { /* async I²C / DDC transport */ }
@@ -47,7 +59,6 @@ impl ScdcClient for MyScdcClient {
     async fn read_source_test_config(&mut self) -> Result<SourceTestConfig, MyError> { todo!() }
     async fn write_config_0_defaults(&mut self) -> Result<(), MyError> { todo!() }
     async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), MyError> { todo!() }
-    async fn read_ced(&mut self) -> Result<CedCounters, MyError> { todo!() }
 }
 ```
 
@@ -106,7 +117,7 @@ impl SendScdcClient for MyThreadSafeScdcClient {
     type Error = MyError;
 
     async fn read_flt_ready(&mut self) -> Result<bool, MyError> { todo!() }
-    // … the other seven methods, as for `ScdcClient`
+    // … the other six methods, as for `ScdcClient`
 }
 
 fn spawn_training<C, P>(mut trainer: FrlTrainer<C, P>, rates: &'static [HdmiForumFrl])
@@ -276,11 +287,19 @@ Releases are built on GitHub Actions and attested with
 [GitHub CLI](https://cli.github.com/) and run:
 
 ```sh
-gh attestation verify plumbob-async-X.Y.Z.crate --repo DracoWhitefire/plumbob-async
+gh attestation verify plumbob-async-X.Y.Z.crate --repo ashlar-display/plumbob-async
+```
+
+The release from before the repository moved to the `ashlar-display` organization (0.2.0)
+was attested under its previous owner, and verifies against it:
+
+```sh
+gh attestation verify plumbob-async-0.2.0.crate --owner DracoWhitefire \
+  --signer-repo DracoWhitefire/plumbob-async
 ```
 
 The attested `.crate` is attached to each
-[GitHub release](https://github.com/DracoWhitefire/plumbob-async/releases).
+[GitHub release](https://github.com/ashlar-display/plumbob-async/releases).
 
 Releases from 0.2.0 are uploaded through crates.io
 [trusted publishing](https://rust-lang.github.io/rfcs/3691-trusted-publishing-cratesio.html): the publish

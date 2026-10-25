@@ -21,8 +21,6 @@ For field-level documentation of each re-exported type, see
 | `UpdateFlags`          | struct | All seven `Update_0` flags; `new(…)` (bit order) or set fields on the default                             |
 | `ClearableUpdateFlags` | struct | The flags `clear_update_flags` takes: all but `RR_Test`                                                   |
 | `SourceTestConfig`     | struct | All six `Source_Test_Configuration` bits; `new(…)` or set fields on the default                           |
-| `CedCount`             | struct | 15-bit per-lane character error count                                                                     |
-| `CedCounters`          | struct | Per-lane `Option<CedCount>`; `lane3` is `None` in 3-lane mode; `new(…)`                                   |
 | `TrainingConfig`       | struct | Per-attempt configuration: FFE levels, poll limits, retrain limit                                         |
 | `Trained`              | struct | What `train` returns: the `outcome` and the attempt's warnings (`warnings()`)                             |
 | `TrainingOutcome`      | enum   | `Success { achieved_rate, .. }`, `FallbackRequired { reason, .. }`, or `NoTimeoutHold { rate, .. }`       |
@@ -41,7 +39,7 @@ For field-level documentation of each re-exported type, see
 ### `ScdcClient`
 
 The trait defined in this crate: the async counterpart of `plumbob::ScdcClient`, with
-the same eight operations, meaning and implementer obligations, each an `async fn`.
+the same seven operations, meaning and implementer obligations, each an `async fn`.
 It is a distinct trait: a type implementing the sync trait does not implement this one.
 Async transports implement this trait; sync transports implement `plumbob::ScdcClient`.
 
