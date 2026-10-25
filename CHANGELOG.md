@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are aligned across the stack, with `ashlar` and `hdmi` on every crate; `ashlar` and
   `async` are added, `frl` and `embedded` are dropped. Categories gain `no-std::no-alloc`.
   The crate's `homepage` is now the Ashlar website.
+- **Moved to the `ashlar-display` organization** — the repository is now
+  `ashlar-display/plumbob-async` (the old URLs redirect), and `repository` points there.
+  Releases are attested and published from the new repository; 0.2.0, attested before the
+  move, verifies with `--owner DracoWhitefire --signer-repo DracoWhitefire/plumbob-async`
+  (see "Verifying releases" in the README). The code of conduct is now the organization's,
+  shared by every Ashlar repository; the repository's own copy is removed.
 
 ## [0.2.0] - 2026-10-17
 

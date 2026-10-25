@@ -249,6 +249,8 @@ The principles are `plumbob`'s:
   are re-exported here. There is no parallel type hierarchy.
 - **Attested releases.** Every release is published through a GitHub Actions workflow
   that signs the `.crate` package with [SLSA Build Level 2](https://slsa.dev) provenance.
-  Verify with `gh attestation verify <file> --repo DracoWhitefire/plumbob-async`.
+  Verify with `gh attestation verify <file> --repo ashlar-display/plumbob-async` (the release from
+  before the move to the `ashlar-display` organization: see "Verifying releases" in the
+  README).
 
 [`plumbob::lts::run`]: https://docs.rs/plumbob/latest/plumbob/lts/fn.run.html
