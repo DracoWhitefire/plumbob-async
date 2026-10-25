@@ -23,8 +23,7 @@ The library itself imposes no executor constraint. Any runtime that can drive an
   `FRL_start`. It can raise `Source_Test_Update` before training, change
   `Source_Test_Configuration` (raising `Source_Test_Update`) once LTS:3 begins, fail any
   one operation, and make every operation wait. It records the flags it is asked to clear,
-  its `Config_0` writes and the `FrlConfig`s written, and returns distinct per-lane CED
-  counts.
+  its `Config_0` writes and the `FrlConfig`s written.
 - `SendSink` and `SendPhy` — the same doubles behind the `Send` twins, `SendScdcClient`
   and `SendHdmiPhy`.
 - `Phy` — an async `HdmiPhy` that records the rates, patterns, output modes and
@@ -49,8 +48,7 @@ The tests check:
 - **The `Send` twins in generic code**: a function generic over `SendScdcClient` and
   `SendHdmiPhy` must return a `Send` future that trains, runs `exit_to_tmds`, trains with
   events and (with `alloc`) traced; it compiles only if all of them are `Send`, and it runs
-  over a sink that waits. `read_ced`, which training does not call, gets its own `Send`
-  check
+  over a sink that waits
 - **The twin forwards every operation unchanged**: the same scripted sink through the
   plain client and through `SendSink` gives the same result, events, sink records and
   PHY records

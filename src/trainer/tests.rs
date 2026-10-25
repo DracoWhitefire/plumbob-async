@@ -14,8 +14,8 @@ use hdmi_hal_async::LtpPattern;
 
 use super::*;
 use crate::{
-    CedCount, CedCounters, FallbackReason, FfeLevels, LtpReq, SendHdmiPhy, SendScdcClient,
-    TrainingOutcome, TrainingWarning, TxFfeRestrictions,
+    FallbackReason, FfeLevels, LtpReq, SendHdmiPhy, SendScdcClient, TrainingOutcome,
+    TrainingWarning, TxFfeRestrictions,
 };
 
 const RATE: HdmiForumFrl = HdmiForumFrl::Rate6Gbps4Lanes;
@@ -76,16 +76,6 @@ struct Sink {
     frl_configs: Vec<FrlConfig>,
     waits: bool,
     fail: Option<&'static str>,
-}
-
-/// What `Sink::read_ced` returns: distinct per lane, so a forwarding mistake shows.
-fn ced() -> CedCounters {
-    CedCounters::new(
-        Some(CedCount::new(1)),
-        Some(CedCount::new(2)),
-        Some(CedCount::new(3)),
-        None,
-    )
 }
 
 // The flags plumbob clears, one at a time: `Source_Test_Update`, `FRL_start`, `FLT_update`.
@@ -181,11 +171,6 @@ impl ScdcClient for Sink {
         self.frl_configs.push(config);
         self.configured = config.frl_rate != HdmiForumFrl::NotSupported;
         Ok(())
-    }
-
-    async fn read_ced(&mut self) -> Result<CedCounters, &'static str> {
-        operation(self.waits, self.fail, "read_ced").await?;
-        Ok(ced())
     }
 }
 
@@ -446,13 +431,7 @@ async fn traced_training_records_the_attempt() {
 async fn the_test_doubles_answer_the_operations_training_does_not_use() {
     // Covers the trait methods the state machine never calls.
     let mut sink = Sink::default();
-    assert!(sink.read_ced().await.is_ok());
     assert!(sink.read_source_test_config().await.is_ok());
-    let mut sink = Sink {
-        fail: Some("read_ced"),
-        ..Sink::default()
-    };
-    assert_eq!(sink.read_ced().await, Err("read_ced"));
     assert!(Phy::default().set_scrambling(true).await.is_ok());
 }
 
@@ -634,10 +613,6 @@ impl SendScdcClient for SendSink {
     async fn write_frl_config(&mut self, config: FrlConfig) -> Result<(), &'static str> {
         ScdcClient::write_frl_config(&mut self.0, config).await
     }
-
-    async fn read_ced(&mut self) -> Result<CedCounters, &'static str> {
-        ScdcClient::read_ced(&mut self.0).await
-    }
 }
 
 /// `Phy` behind hdmi-hal-async's `Send` twin.
@@ -703,14 +678,6 @@ fn spawnable<'a, C: SendScdcClient, P: SendHdmiPhy>(
     train_exit_train(trainer, config, events)
 }
 
-/// `read_ced` through the blanket implementation, as a future that must be `Send`:
-/// training never calls it, so `spawnable` does not check it.
-fn read_ced_spawnable<C: SendScdcClient>(
-    client: &mut C,
-) -> impl Future<Output = Result<CedCounters, C::Error>> + Send + '_ {
-    ScdcClient::read_ced(client)
-}
-
 #[pollster::test]
 async fn the_send_twins_train_in_generic_send_code() {
     let sink = Sink {
@@ -733,9 +700,8 @@ async fn the_send_twins_train_in_generic_send_code() {
     assert_eq!(exit, Ok(()));
     assert!(with_events.is_ok());
     assert!(events > 0);
-    // The operations training does not use, through the blanket implementations.
-    let (mut sink, mut phy) = trainer.into_parts();
-    assert_eq!(read_ced_spawnable(&mut sink).await, Ok(ced()));
+    // The operation training does not use, through the blanket implementation.
+    let (_, mut phy) = trainer.into_parts();
     assert_eq!(HdmiPhy::set_scrambling(&mut phy, true).await, Ok(()));
 }
 
