@@ -15,12 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one. Implementations delete their `read_ced`. To read the counters, use the SCDC
   implementation directly (culvert-async's `read_ced`), or a trait of your own in the
   integration layer.
-- **Requires the plumbob and hdmi-hal-async releases on hdmi-hal 0.6.** The PHY interface
+- **Requires plumbob 0.4 and hdmi-hal-async 0.3, on hdmi-hal 0.6.** The PHY interface
   re-exported from hdmi-hal-async (`HdmiPhy`, `SendHdmiPhy`, `EqParams`, `FrlOutput`,
   `LaneEqParams`, `LanePatterns`, `LtpPattern`, `TxFfeLevel`, `TxFfeRestrictions`) is now
   built on hdmi-hal 0.6's types: a PHY implementing the previous hdmi-hal-async's
-  `HdmiPhy` no longer fits `FrlTrainer`. Move plumbob, hdmi-hal-async and hdmi-hal
-  alongside this crate; the traits themselves are unchanged. `HdmiForumFrl` is
+  `HdmiPhy` no longer fits `FrlTrainer`. Move plumbob (0.4), hdmi-hal-async (0.3) and
+  hdmi-hal (0.6) alongside this crate; the traits themselves are unchanged. `HdmiForumFrl` is
   display-types' and is unaffected.
 
 ### Changed

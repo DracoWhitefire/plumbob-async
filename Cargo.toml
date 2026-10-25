@@ -16,20 +16,9 @@ alloc = ["plumbob/alloc"]
 std = ["alloc", "plumbob/std"]
 
 [dependencies]
-plumbob = { version = "0.3.1", default-features = false }
-hdmi-hal-async = { version = "0.2.1", default-features = false }
+plumbob = { version = "0.4", default-features = false }
+hdmi-hal-async = { version = "0.3", default-features = false }
 display-types = { version = "0.4", default-features = false }
 
 [dev-dependencies]
 pollster = { version = "0.3", features = ["macro"] }
-
-# Temporary, until plumbob (without `read_ced`), hdmi-hal-async and hdmi-hal (required
-# `read_block`; hdmi-hal 0.6) and display-types 0.4.3 are published: replaces them for the
-# whole graph, each other's dependencies included, so that plumbob and hdmi-hal-async
-# share one hdmi-hal. The requirements above move to those releases then. Remove before
-# merging.
-[patch.crates-io]
-plumbob = { path = "../plumbob" }
-hdmi-hal-async = { path = "../hdmi-hal-async" }
-hdmi-hal = { path = "../hdmi-hal" }
-display-types = { path = "../display-types" }
